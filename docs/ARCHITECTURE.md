@@ -10,11 +10,14 @@
 - **OPEN:** a provider or operational choice that can remain unresolved without
   changing the architecture boundary.
 
-As of 2026-09-29 the Slice 0 Next.js shell, process-only health route, and local
-quality commands are **IMPLEMENTED**. Database, storage, authentication,
-authorization, tenant isolation, AI, export, worker, deployment, and product
-security controls remain **NOT IMPLEMENTED**. This document selects their
-architecture; it does not claim that those protections exist.
+As of 2026-10-01 the Slice 0 Next.js shell and Slice 1A PostgreSQL/Drizzle
+foundation are **IMPLEMENTED**; Slice 1A is **APPROVED** after real local
+PostgreSQL 18.6 positive/negative-path validation. Separate runtime and migration
+roles were provisioned and verified in that local instance only. Product
+tables, RLS, storage, authentication, authorization, tenant isolation, AI,
+export, worker, deployment, and product security controls remain **NOT
+IMPLEMENTED**. Local database setup is not production provisioning or proof of
+tenant isolation.
 
 ## Recommended architecture — DECIDED
 
@@ -64,10 +67,10 @@ filesystem, so deployment must not assume static export semantics.
 
 ## Repository layout
 
-Only `src/app/`, the two Slice 0 tests, and root runtime/tool configuration are
-implemented. `src/modules/`, `src/platform/`, `src/worker/`, `drizzle/`, and the
-larger test hierarchy remain planned and must be added only by the slice that
-needs them.
+`src/app/`, the two Slice 0 tests, and the Slice 1A database foundation under
+`src/platform/db/` are implemented. `src/modules/`, the remaining platform
+adapters, `src/worker/`, product schema migrations, and the larger test
+hierarchy remain planned and must be added only by the slice that needs them.
 
 ```text
 seller-shield/
@@ -83,13 +86,13 @@ seller-shield/
 │  │  └─ outcomes/              # seller-entered results and metrics events
 │  ├─ platform/
 │  │  ├─ auth/                  # Auth.js adapter and session translation
-│  │  ├─ db/                    # Drizzle client, tenant transaction boundary
+│  │  ├─ db/                    # Drizzle foundation; tenant boundary is planned
 │  │  ├─ storage/               # S3-compatible implementation
 │  │  ├─ ai/                    # one provider adapter implementation
 │  │  ├─ pdf/                   # Playwright renderer
 │  │  └─ observability/         # logs, request IDs, error reporting
 │  └─ worker/                   # added only when durable jobs require a process
-├─ drizzle/                     # reviewed SQL migrations
+├─ drizzle/                     # empty journal now; reviewed SQL later
 ├─ tests/
 │  ├─ unit/
 │  ├─ integration/
@@ -163,8 +166,11 @@ PostgreSQL job claiming with `FOR UPDATE SKIP LOCKED` is sufficient for MVP. Do
 not add Redis or an external queue without measured contention or throughput
 evidence.
 
-## Database — DECIDED, NOT IMPLEMENTED
+## Database — DECIDED; Slice 1A foundation IMPLEMENTED
 
+- The local development, CI, and initial deployment baseline is PostgreSQL
+  18.6. Later supported minor releases may replace it after normal dependency
+  validation; a major-version change requires an explicit architecture review.
 - PostgreSQL is the single system of record for relational domain state,
   authorization relationships, audit/domain events, package manifests, and job
   status.
@@ -176,11 +182,33 @@ evidence.
   applied and a reset/transaction strategy that does not hide RLS behavior.
 - Critical browser tests run against the same Postgres-backed application.
 
+Slice 1A implements the Postgres.js/Drizzle connection factory, a server-only
+application singleton, validated runtime and migration URLs, an intentionally
+empty schema entry point, and Drizzle generate/migrate commands. The runtime
+smoke command executes `SELECT 1` and fails if PostgreSQL is unavailable. The
+runtime URL and migration-owner URL are separate so later production roles can
+keep ordinary application access distinct from schema ownership.
+
+The local Slice 1A foundation was verified against PostgreSQL 18.6 on
+2026-10-01 using separate runtime and migration roles. `pnpm db:check`,
+`pnpm db:migrate`, and `pnpm test:db` passed with valid credentials and each
+exited nonzero with a wrong password, without exposing passwords or connection
+URLs. Database commands load `.env.local`, then `.env`, without replacing
+existing process environment variables. `pnpm test` excludes external-service
+integration tests; `pnpm test:db` is the explicit real-DB gate and fails when
+`DATABASE_URL` is absent. The checked-in `drizzle/` content is only Drizzle's
+empty journal; there is no SQL migration. Migration application creates only
+the Drizzle bookkeeping table, not a product table. Local role privileges and
+the remaining schema boundary are recorded in
+[`docs/DATABASE.md`](DATABASE.md#slice-1a-foundation--implemented-local-validation).
+
 The conceptual model and future schema constraints are defined in
 [`docs/DATA_MODEL.md`](DATA_MODEL.md). The approved physical PostgreSQL table,
 constraint, index, and RLS policy design is in
-[`docs/DATABASE.md`](DATABASE.md). Drizzle definitions and migration SQL remain
-**NOT IMPLEMENTED** and are created only by later slice-specific tasks.
+[`docs/DATABASE.md`](DATABASE.md). Concrete table definitions, SQL migrations,
+production database-role provisioning, automated test-database lifecycle, and
+RLS remain **NOT IMPLEMENTED** and are created only by later slice-specific
+tasks.
 
 ## Authentication and tenant model — DECIDED, NOT IMPLEMENTED
 

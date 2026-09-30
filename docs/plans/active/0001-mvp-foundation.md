@@ -1,8 +1,9 @@
 # MVP Foundation Implementation Plan
 
-> **Status:** Active implementation plan. Slice 0 is IMPLEMENTED; Slices 1–6
-> remain PLANNED. Execution must follow the root `AGENTS.md`; do not commit or
-> push unless a later task explicitly requests it.
+> **Status:** Active implementation plan. Slice 0 is IMPLEMENTED. Slice 1A
+> is IMPLEMENTED and APPROVED after real-PostgreSQL validation on 2026-10-01;
+> Slice 1B onward remains PLANNED. Execution must follow the root `AGENTS.md`;
+> do not commit or push unless a later task explicitly requests it.
 
 **Goal:** Deliver the smallest tenant-safe, manual-first workflow that takes a
 real seller claim from intake through evidence review, human-approved response
@@ -15,16 +16,19 @@ guidance in [`docs/DATA_MODEL.md`](../../DATA_MODEL.md) and
 [`docs/DATABASE.md`](../../DATABASE.md).
 
 **Repository starting point:** The repository began with documentation only and
-now contains the verified Slice 0 executable foundation. The stack, planned file
-layout, tenant boundary, evidence-storage pattern,
+now contains the verified Slice 0 executable foundation plus the Slice 1A
+PostgreSQL/Drizzle infrastructure. The stack, planned file layout, tenant
+boundary, evidence-storage pattern,
 AI boundary, policy reproducibility, export strategy, and deployment shape are
 decided in [`docs/ARCHITECTURE.md`](../../ARCHITECTURE.md) and `docs/adr/`.
 The conceptual data model is decided in
 [`docs/DATA_MODEL.md`](../../DATA_MODEL.md), and the implementation-ready
 physical PostgreSQL design is decided in
-[`docs/DATABASE.md`](../../DATABASE.md). Application shell files and exact Slice
-0 commands now exist; Drizzle schema, migrations, database roles/policies, and
-all later product code do not exist until later slice tasks implement them.
+[`docs/DATABASE.md`](../../DATABASE.md). Application shell files, an empty
+Drizzle schema entry point, database connection tooling, and migration commands
+now exist, with separate runtime/migration roles verified in a local instance.
+Product table definitions, SQL migrations, production role provisioning, RLS
+policies, and all later product code remain unimplemented until later slices.
 Provider selections explicitly left open below are not capabilities.
 
 ## Global constraints
@@ -128,6 +132,24 @@ None beyond the product name and documentation routes.
   production deployment, observability platforms, and marketplace connectors.
 
 ## Slice 1 — Tenant boundary and manual case workflow
+
+> **Implementation status:** Slice 1A database infrastructure is IMPLEMENTED
+> and APPROVED on 2026-10-01 after local PostgreSQL 18.6 validation. It includes the
+> empty Drizzle schema, separate runtime/migration URL validation, migration
+> commands, a real `SELECT 1` smoke path, and an explicit `pnpm test:db` gate
+> that fails when no database is configured. Slice 1B (Auth.js/User), 1C
+> (Tenant/Membership/RLS), 1D (Case/ClaimSnapshot/CaseEvent), and 1E (manual
+> Create → Inbox → Detail) remain PLANNED.
+
+Slice 1A validation record: `pnpm install --frozen-lockfile`, `pnpm check`
+(15 tests), `pnpm build`, `pnpm db:check`, `pnpm db:migrate`, and `pnpm test:db`
+(1 real-DB test) passed. Each DB command also failed with a deliberately wrong
+password and emitted no password or connection URL. Actual role flags,
+ownership, and runtime CREATE denial were checked as described in
+[`docs/DATABASE.md`](../../DATABASE.md#slice-1a-foundation--implemented-local-validation).
+`.env.local` and tool scratch are ignored; PostgreSQL data lives outside Git.
+Zero SQL migrations and zero product tables remain the approved Slice 1A
+boundary. Slice 1B has not started.
 
 ### Goal
 
