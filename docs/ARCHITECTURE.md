@@ -4,14 +4,17 @@
 
 - **DECIDED:** an approved architecture decision for implementation.
 - **PLANNED:** behavior assigned to an MVP slice but not implemented.
+- **IMPLEMENTED:** code/configuration exists and the documented validation has
+  passed for the stated boundary.
 - **NOT IMPLEMENTED:** no application code or verified runtime control exists.
 - **OPEN:** a provider or operational choice that can remain unresolved without
   changing the architecture boundary.
 
-As of 2026-09-29 the application, database, storage, authentication, AI,
-export, worker, deployment, and security controls described below are **NOT
-IMPLEMENTED**. This document selects their architecture; it does not claim that
-the protections exist.
+As of 2026-09-29 the Slice 0 Next.js shell, process-only health route, and local
+quality commands are **IMPLEMENTED**. Database, storage, authentication,
+authorization, tenant isolation, AI, export, worker, deployment, and product
+security controls remain **NOT IMPLEMENTED**. This document selects their
+architecture; it does not claim that those protections exist.
 
 ## Recommended architecture — DECIDED
 
@@ -59,9 +62,12 @@ and PDF operations, and pinned Chromium require a Node server runtime. Some
 serverless hosts terminate long-running handlers or provide no persistent
 filesystem, so deployment must not assume static export semantics.
 
-## Planned repository layout
+## Repository layout
 
-No files in this tree are implemented yet.
+Only `src/app/`, the two Slice 0 tests, and root runtime/tool configuration are
+implemented. `src/modules/`, `src/platform/`, `src/worker/`, `drizzle/`, and the
+larger test hierarchy remain planned and must be added only by the slice that
+needs them.
 
 ```text
 seller-shield/
@@ -98,7 +104,7 @@ Do not add `packages/` until code is genuinely shared by independently useful
 consumers. Do not add a separate API application until a measured runtime or
 team boundary requires it.
 
-## Frontend — DECIDED, NOT IMPLEMENTED
+## Frontend — DECIDED; Slice 0 shell IMPLEMENTED
 
 - **Language/framework:** TypeScript, React, Next.js App Router.
 - **Rendering:** Server Components for authenticated reads and first render;
@@ -113,9 +119,18 @@ team boundary requires it.
 - **Testing:** Vitest for pure logic, React Testing Library for focused
   interactive components, and Playwright for critical browser flows.
 
-## Backend and API — DECIDED, NOT IMPLEMENTED
+The implemented Slice 0 UI is one semantic Server Component shell with no
+fictional business data. React Testing Library and Playwright are not installed
+because there is no interactive component or critical browser workflow yet; a
+server-rendered Vitest test covers the current shell.
+
+## Backend and API — DECIDED; process health IMPLEMENTED
 
 Next.js runs on the Node.js runtime and hosts the application layer.
+
+Slice 0 implements only `GET /api/health`, returning process status with no
+database, storage, AI, authentication, or marketplace claim. All application
+services and domain/infrastructure adapters below remain **NOT IMPLEMENTED**.
 
 - Server Actions and Route Handlers are thin adapters. They authenticate,
   validate, build an `AccessContext`, call one application service, and map the
@@ -140,9 +155,13 @@ remain authoritative for uniqueness and referential integrity.
 | PDF export | PostgreSQL job record with idempotency; may execute inline first | Chromium runtime or retry behavior exceeds the bounded request. |
 
 The worker, when introduced, uses the same package, modules, database, and
-container image. PostgreSQL job claiming (for example, `FOR UPDATE SKIP LOCKED`)
-is sufficient for MVP. Do not add Redis or an external queue without measured
-contention or throughput evidence.
+container image. `background_jobs` is a SYSTEM-scoped queue: the worker claims
+one job across tenants, obtains its `tenant_id`, then performs domain work in a
+separate tenant-scoped transaction under ordinary RLS. The worker has no
+general `BYPASSRLS`; only the queue table exposes a cross-tenant claim policy.
+PostgreSQL job claiming with `FOR UPDATE SKIP LOCKED` is sufficient for MVP. Do
+not add Redis or an external queue without measured contention or throughput
+evidence.
 
 ## Database — DECIDED, NOT IMPLEMENTED
 
@@ -157,8 +176,11 @@ contention or throughput evidence.
   applied and a reset/transaction strategy that does not hide RLS behavior.
 - Critical browser tests run against the same Postgres-backed application.
 
-The full schema is deliberately deferred to the Domain Model and Data Model
-tasks. This task decides technology and isolation, not columns.
+The conceptual model and future schema constraints are defined in
+[`docs/DATA_MODEL.md`](DATA_MODEL.md). The approved physical PostgreSQL table,
+constraint, index, and RLS policy design is in
+[`docs/DATABASE.md`](DATABASE.md). Drizzle definitions and migration SQL remain
+**NOT IMPLEMENTED** and are created only by later slice-specific tasks.
 
 ## Authentication and tenant model — DECIDED, NOT IMPLEMENTED
 
@@ -170,6 +192,12 @@ Conceptual identity model:
 - `User`: authenticated person.
 - `Tenant`: seller workspace and data-ownership boundary.
 - `Membership`: User-to-Tenant relationship with one role.
+
+Auth.js `User`, `Account`, `Session`, and `VerificationToken` infrastructure is
+GLOBAL rather than tenant-owned. `Tenant` is the TENANT_ROOT and has no
+`tenant_id` of its own; `Membership` and every tenant-domain record are owned by
+that root. Do not add `tenant_id` to Auth.js adapter tables as a substitute for
+Membership authorization.
 
 MVP roles:
 
@@ -480,11 +508,15 @@ boundary and are rechecked on finalize/read.
 
 - Product behavior and MVP scope: `docs/PRODUCT.md`
 - Claim, evidence, policy, and response semantics: `docs/domain/`
+- Aggregate boundaries, entity relationships, and lifecycle invariants:
+  `docs/DATA_MODEL.md`
+- Physical tables, constraints, indexes, scope classification, and RLS policy
+  intent: `docs/DATABASE.md`
 - Security/privacy requirements and control status: `docs/SECURITY.md`
 - Architecture decisions and boundaries: this document and `docs/adr/`
 - Slice sequence and remaining provider decisions:
   `docs/plans/active/0001-mvp-foundation.md`
-- Current implementation: application code/configuration once it exists
+- Current implementation: application code and configuration in this repository
 
 When implementation begins, update **NOT IMPLEMENTED** claims only after the
 relevant code and validation exist.

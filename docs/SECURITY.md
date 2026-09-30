@@ -1,9 +1,9 @@
 # Seller Shield security and privacy
 
 These are durable requirements and approved architecture controls for future
-implementation. No application code is present, so none of the controls below
-is claimed as implemented unless this document is updated with code and
-validation references.
+implementation. Slice 0 contains only a public development shell and
+process-health route; none of the controls below is claimed as implemented
+unless this document is updated with code and validation references.
 
 ## Status
 
@@ -41,10 +41,21 @@ and deletion workflows.
 - Background work and administrative paths must enforce equivalent isolation.
 - Resolve User membership and role server-side, then execute tenant-owned work
   in a transaction-scoped tenant context.
+- Establish RLS context actor-first: set the authenticated actor locally,
+  resolve only that actor's Membership for the requested Tenant, authorize the
+  capability, and set the tenant context only after that check succeeds.
 - Use PostgreSQL RLS as defense in depth with an application role that cannot
   bypass RLS; migrations use a separate owner role.
 - Use tenant-aware relationships/composite constraints where a foreign key
   could otherwise connect two tenants.
+- Treat `background_jobs` as a SYSTEM queue with tenant attribution. A worker
+  may claim across that queue through a table-specific policy, but must obtain
+  the job tenant and open a separate tenant-scoped transaction before reading
+  Case, Evidence, Policy, Response, or Package data.
+- The worker role must not own tenant tables or have `BYPASSRLS`. Tenant RLS
+  admits worker access only for a valid, unexpired leased job context.
+- Integration tests must prove that forcing a Tenant ID for which the actor has
+  no Membership cannot acquire authorization or expose Case/Evidence rows.
 
 ## Evidence access and integrity
 
@@ -60,6 +71,10 @@ and deletion workflows.
   it does not prove authenticity, truth, source identity, or capture time.
 - Approved package manifests preserve selected evidence versions and digests;
   later deletion must not silently rewrite the historical basis.
+- Approved packages are fully reconstructable only while required Artifact
+  bytes remain retained. After permitted physical deletion, immutable manifest,
+  identity, digest, and deletion tombstone records remain auditable, but the
+  product must report that binary reconstruction is unavailable.
 - Legal chain-of-custody and WORM/object-lock controls are not MVP claims.
 
 ## Auditability
@@ -82,6 +97,9 @@ and deletion workflows.
 - Ensure copies, derived artifacts, logs, backups, and external processors are
   covered by the retention and deletion design.
 - Concrete periods and deletion workflows are `NOT YET IMPLEMENTED / UNKNOWN`.
+- An active package/legal/security retention hold blocks physical byte deletion.
+  Unlinking Evidence or logically deleting a Case never removes approved
+  package history or Artifact tombstones.
 
 ## Credentials and secrets
 

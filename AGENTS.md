@@ -32,6 +32,13 @@ the smallest set of matching documents.
 - Application boundaries, dependencies, API/schema ownership, storage or
   integration boundaries, or source-of-truth changes
   -> `docs/ARCHITECTURE.md`
+- Aggregate boundaries, entity relationships, and lifecycle invariants
+  -> `docs/DATA_MODEL.md`
+- Physical schema, migrations, database constraints, indexes, table scope, or
+  RLS policy design
+  -> `docs/DATABASE.md` and `docs/ARCHITECTURE.md`; also read
+     `docs/DATA_MODEL.md` for domain invariants and `docs/SECURITY.md` when
+     tenant, authorization, privacy, retention, or deletion is affected
 - Authentication, authorization, PII, tenant isolation, evidence access,
   audit, retention, deletion, secrets, or AI data handling
   -> `docs/SECURITY.md`

@@ -5,8 +5,15 @@ define database columns, storage technology, or implemented controls.
 
 ## Meaning
 
-Evidence is source material relevant to a claim. It is distinct from a summary,
-normalization, verification result, case analysis, or AI-generated statement.
+Evidence is source material relevant to a Case. It is distinct from a summary,
+normalization, verification result, Case analysis, or AI-generated statement.
+
+Evidence is also distinct from an `Artifact`: Evidence gives source material
+domain meaning, while an Artifact records immutable stored bytes. Evidence may
+be manual text, structured information, or an external reference with no
+Artifact; an original or derived Artifact may support Evidence, a policy
+snapshot, or an export. Detailed relationships and lifecycle rules are in
+[`docs/DATA_MODEL.md`](../DATA_MODEL.md).
 
 ## Conceptual categories
 
@@ -46,7 +53,7 @@ case need; they must not be added solely for a single file format.
 
 At minimum, the conceptual record must preserve:
 
-- the tenant and claim relationship,
+- the tenant and Case relationship,
 - the evidence category and media or reference type,
 - the known source and how it was obtained,
 - the actor who added it,
@@ -54,10 +61,12 @@ At minimum, the conceptual record must preserve:
 - an identifier for the original artifact or external reference,
 - and links from every derived artifact back to its source material.
 
-These are information requirements, not database columns. Hashing, storage
-immutability, upload limits, malware scanning, retention, deletion, and formal
-chain-of-custody mechanisms remain open implementation decisions governed by
-`docs/SECURITY.md` and the active implementation plan.
+These are information requirements, not database columns. Private object
+storage, immutable final originals, derived-object separation, and SHA-256 are
+approved but not implemented architecture decisions. Upload limits, malware
+inspection, concrete retention/deletion schedules, and formal chain-of-custody
+mechanisms remain open implementation decisions governed by
+`docs/ARCHITECTURE.md`, `docs/SECURITY.md`, and the active plan.
 
 Do not infer that uploaded material is authentic merely because it exists in
 storage. Collection, integrity checking, and factual verification are separate

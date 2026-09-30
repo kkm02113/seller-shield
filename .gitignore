@@ -1,0 +1,23 @@
+# Dependencies
+/node_modules/
+/.pnpm-store/
+
+# Next.js output
+/.next/
+/out/
+
+# Test and TypeScript output
+/coverage/
+*.tsbuildinfo
+
+# Local environment (none are required in Slice 0)
+.env*
+!.env.example
+
+# Tool scratch and logs
+/.superpowers/
+*.log
+
+# OS/editor files
+.DS_Store
+Thumbs.db

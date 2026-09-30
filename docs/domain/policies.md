@@ -2,9 +2,14 @@
 
 ## Meaning
 
-A policy is an attributable marketplace rule used to evaluate a claim. A
-policy version identifies the rule text or interpretation applicable at a
-particular effective point or source revision.
+A policy is an attributable marketplace rule used to evaluate a Case and its
+source claim. A policy version identifies the rule text or interpretation
+applicable at a particular effective point or source revision.
+
+The conceptual model separates `PolicyReference`, the stable source identity
+and Case relationship, from immutable `PolicySnapshot` captures. A Case and an
+approved package use a specific snapshot, never an unversioned live URL. See
+[`docs/DATA_MODEL.md`](../DATA_MODEL.md) for the aggregate boundary.
 
 ## Invariants
 

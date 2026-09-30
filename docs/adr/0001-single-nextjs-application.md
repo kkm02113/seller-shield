@@ -1,15 +1,18 @@
 # ADR-001: Single Next.js application
 
 - **Status:** Accepted
-- **Implementation:** NOT IMPLEMENTED
+- **Implementation:** IMPLEMENTED FOR SLICE 0 (shell and process-health Route
+  Handler only); product modules and infrastructure adapters remain NOT
+  IMPLEMENTED
 
 ## Context
 
-Seller Shield has no application code and needs one small team to deliver UI,
-server-side authorization, case workflows, evidence access, optional AI, and
-export without operating two application runtimes. A separate Next.js frontend
-and FastAPI backend would add deployments, contracts, tracing, and duplicated
-validation before a Python-only workload exists.
+At the time of this decision Seller Shield had no application code and needed
+one small team to deliver UI, server-side authorization, case workflows,
+evidence access, optional AI, and export without operating two application
+runtimes. A separate Next.js frontend and FastAPI backend would add deployments,
+contracts, tracing, and duplicated validation before a Python-only workload
+exists.
 
 ## Decision
 

@@ -1,8 +1,8 @@
 # MVP Foundation Implementation Plan
 
-> **Status:** Active planning document. No application code or product feature
-> is currently implemented. Execution must follow the root `AGENTS.md`; do not
-> commit or push unless a later task explicitly requests it.
+> **Status:** Active implementation plan. Slice 0 is IMPLEMENTED; Slices 1–6
+> remain PLANNED. Execution must follow the root `AGENTS.md`; do not commit or
+> push unless a later task explicitly requests it.
 
 **Goal:** Deliver the smallest tenant-safe, manual-first workflow that takes a
 real seller claim from intake through evidence review, human-approved response
@@ -10,14 +10,22 @@ package, externally performed submission, and recorded outcome.
 
 **Spec:** [`docs/PRODUCT.md`](../../PRODUCT.md), with authoritative case and
 evidence semantics in [`docs/domain/claims.md`](../../domain/claims.md) and
-[`docs/domain/evidence.md`](../../domain/evidence.md).
+[`docs/domain/evidence.md`](../../domain/evidence.md), and aggregate/schema
+guidance in [`docs/DATA_MODEL.md`](../../DATA_MODEL.md) and
+[`docs/DATABASE.md`](../../DATABASE.md).
 
-**Repository starting point:** The repository currently contains documentation
-only. The stack, planned file layout, tenant boundary, evidence-storage pattern,
+**Repository starting point:** The repository began with documentation only and
+now contains the verified Slice 0 executable foundation. The stack, planned file
+layout, tenant boundary, evidence-storage pattern,
 AI boundary, policy reproducibility, export strategy, and deployment shape are
 decided in [`docs/ARCHITECTURE.md`](../../ARCHITECTURE.md) and `docs/adr/`.
-Application files and exact commands do not exist until Slice 0 implements
-them. Provider selections explicitly left open below are not capabilities.
+The conceptual data model is decided in
+[`docs/DATA_MODEL.md`](../../DATA_MODEL.md), and the implementation-ready
+physical PostgreSQL design is decided in
+[`docs/DATABASE.md`](../../DATABASE.md). Application shell files and exact Slice
+0 commands now exist; Drizzle schema, migrations, database roles/policies, and
+all later product code do not exist until later slice tasks implement them.
+Provider selections explicitly left open below are not capabilities.
 
 ## Global constraints
 
@@ -50,6 +58,12 @@ them. Provider selections explicitly left open below are not capabilities.
 
 ## Slice 0 — Executable project foundation
 
+> **Implementation status:** IMPLEMENTED on 2026-09-29. Validation: pnpm
+> install from the repository lockfile, strict typecheck, ESLint, two Vitest
+> tests, production build, and HTTP startup smoke checks. Playwright was
+> evaluated and deferred because no interactive or critical browser flow exists
+> yet.
+
 ### Goal
 
 Create the smallest single-package Next.js application skeleton and quality
@@ -68,11 +82,11 @@ None beyond the product name and documentation routes.
 
 - Create the Node.js Next.js App Router entry point and a Route Handler health
   check using the planned repository layout.
-- Add environment configuration validation without committing secrets.
-- Establish Vitest, TypeScript typecheck, lint/format, build, and Playwright
-  smoke-test commands.
-- Configure Drizzle/Drizzle Kit and PostgreSQL migration commands without
-  introducing speculative product tables.
+- Add no environment variables unless the executable shell actually requires
+  them; no future-provider configuration is invented.
+- Establish Vitest, strict TypeScript typecheck, ESLint, and build commands.
+- Evaluate a one-flow Playwright smoke test, but defer its dependency and
+  browser binaries when a smaller render/Route Handler test proves Slice 0.
 
 ### Frontend work
 
@@ -80,16 +94,16 @@ None beyond the product name and documentation routes.
   default.
 - Show an explicit empty/not-yet-implemented state rather than fictional case
   data.
-- Add a minimal accessibility smoke check appropriate to the chosen stack.
+- Use semantic markup and test the shell's essential identity/status text.
 
 ### Data changes
 
-- Establish reviewed SQL migration and ephemeral PostgreSQL test conventions.
-- Do not create broad speculative schemas.
+- No database dependency, schema, migration, role, or PostgreSQL test harness is
+  introduced in Slice 0. Those begin with the Slice 1 tables that need them.
 
 ### Security and privacy
 
-- Provide secret-loading and local example-configuration conventions.
+- Commit no secrets and create no `.env.example` when no configuration exists.
 - Use synthetic data only.
 - Document which security controls remain unimplemented.
 
@@ -97,7 +111,7 @@ None beyond the product name and documentation routes.
 
 - Application startup or health check.
 - Minimal frontend render/smoke test.
-- Configuration rejects a missing required value without exposing secrets.
+- Health response claims process readiness only.
 - Quality commands run in a clean local checkout.
 
 ### Acceptance criteria
@@ -128,8 +142,8 @@ Detail, preserve original claim content, and move between `DRAFT`,
 
 ### Domain involved
 
-Tenant, actor, claim, case state, case disposition, and attributable state
-transition.
+Tenant, actor, Case, ClaimSnapshot, Case state, Case disposition, and
+attributable state transition.
 
 ### Backend work
 
@@ -153,8 +167,8 @@ transition.
 ### Data changes
 
 - Tenant, tenant membership or equivalent actor relationship.
-- Claim/case aggregate with original input, normalized values, state, and
-  closure disposition.
+- Case aggregate with immutable ClaimSnapshot revisions, separate normalized
+  working values, state, and closure disposition.
 - Attributable transition or audit record sufficient for the case history.
 - Exact schema names and columns follow the stack decision and must be reviewed
   against the domain document before implementation.
@@ -207,8 +221,8 @@ all evidence for the case.
 
 ### Domain involved
 
-Evidence item, category, original artifact, external reference, provenance,
-derived relationship, and evidence access.
+Evidence item, category, Artifact/StoredObject, external reference, provenance,
+derived Artifact relationship, and evidence access.
 
 ### Backend work
 
@@ -232,8 +246,8 @@ derived relationship, and evidence access.
 
 ### Data changes
 
-- Evidence metadata and claim relationship.
-- Original artifact or external-reference locator.
+- Evidence metadata and Case relationship, separate from stored bytes.
+- Immutable original Artifact or external-reference locator.
 - Derived-to-source relationship.
 - Evidence access and metadata-change audit events.
 
@@ -477,7 +491,8 @@ submission record, and transitions to `PACKAGE_READY` and `SUBMITTED`.
 
 ### Data changes
 
-- Package version and snapshot/reference set.
+- Package version with live references plus an immutable PackageManifest
+  snapshot and digest.
 - Human approval attribution.
 - Export artifact metadata and failure/retry status.
 - Seller-entered external submission time/reference and actor.
@@ -602,6 +617,7 @@ human approval, or the manual fallback.
 | --- | --- |
 | Application structure | Single containerized TypeScript Next.js App Router modular monolith; [ADR-001](../../adr/0001-single-nextjs-application.md). |
 | Persistence | PostgreSQL with Drizzle ORM and reviewed Drizzle Kit SQL migrations; ADR-001. |
+| Physical schema | GLOBAL Auth.js tables, tenant-owned domain tables with composite tenant FKs/RLS, and a SYSTEM job queue; [`docs/DATABASE.md`](../../DATABASE.md). |
 | Authentication and tenant isolation | Auth.js database sessions, User/Tenant/Membership with `OWNER`/`OPERATOR`/`REVIEWER`, server authorization plus PostgreSQL RLS; [ADR-002](../../adr/0002-tenant-isolation.md). |
 | Evidence storage/integrity | Private S3-compatible storage, authorized short-lived URLs, immutable original keys, SHA-256; [ADR-003](../../adr/0003-evidence-storage-and-integrity.md). |
 | AI boundary | Manual response drafting is primary; optional provider adapter with validated references; [ADR-004](../../adr/0004-manual-first-ai-boundary.md). |

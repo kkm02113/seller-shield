@@ -1,22 +1,30 @@
-# Claims
+# Cases and claims
 
-This document defines MVP v0.1 domain decisions. It does not claim that a case
-model or lifecycle is implemented.
+This document defines MVP v0.1 Case and source-claim semantics. It does not
+claim that a model or lifecycle is implemented.
 
 ## Meaning
 
-A claim is the case being reviewed in Seller Shield: a return, refund, or
-related marketplace dispute that may require evidence collection, policy
-matching, analysis, and a seller response.
+A `Case` is Seller Shield's workflow container for reviewing a return, refund,
+or related marketplace dispute. It owns workflow state and coordinates
+evidence collection, policy matching, response preparation, submission
+recording, and outcome recording.
 
-A claim is a case record, not a representation of a buyer's character or
-reputation. Analysis must remain scoped to the facts and policy relevant to
-that case.
+A `ClaimSnapshot` is an immutable capture of the external marketplace/customer
+claim or a later source revision. A Case may have multiple ordered snapshots;
+normalized working values never overwrite their original source values. The
+detailed aggregate boundary is defined in
+[`docs/DATA_MODEL.md`](../DATA_MODEL.md).
+
+Neither a Case nor a ClaimSnapshot represents a buyer's character or
+reputation. Analysis remains scoped to the facts and policy relevant to the
+Case.
 
 ## Relationships
 
-A claim may provide the context that links:
+A Case provides the context that links:
 
+- one or more source ClaimSnapshots,
 - source evidence and verified or derived material,
 - the applicable marketplace policy version,
 - case analysis,
@@ -28,18 +36,20 @@ This is a domain relationship, not a confirmed database schema.
 
 ## Invariants
 
-- A claim must not assert facts that are unsupported by traceable evidence.
+- A Case must not present facts as established when they are unsupported by
+  traceable evidence.
 - A normal legitimate return must remain a valid outcome of review; the system
-  must not presume every claim requires defense.
-- Claim data belongs to a tenant context and must not be exposed across tenant
-  boundaries.
-- Claim analysis must not create a buyer blacklist or shared reputation record.
+  must not presume every Case requires defense.
+- Case and ClaimSnapshot data belongs to a tenant context and must not be
+  exposed across tenant boundaries.
+- Case analysis must not create a buyer blacklist or shared reputation record.
 
 ## State and lifecycle
 
-The MVP uses the smallest lifecycle that separates collection, review, package
-approval, external submission, and outcome. A state describes workflow
-progress; it is not a buyer or fraud classification.
+The Case uses the smallest lifecycle that separates collection, review,
+package approval, external submission, and outcome. A state describes workflow
+progress; it is not a buyer or fraud classification. This table is the only
+authoritative MVP Case state machine.
 
 | State | Meaning |
 | --- | --- |

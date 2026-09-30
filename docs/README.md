@@ -8,12 +8,16 @@ The root `AGENTS.md` routes a task to only the documents it needs.
 - [Product](PRODUCT.md): purpose, users, boundaries, workflow, and MVP scope.
 - [Architecture](ARCHITECTURE.md): confirmed repository and application
   boundaries, plus explicitly separated plans and unknowns.
+- [Domain and data model](DATA_MODEL.md): aggregate boundaries, relationships,
+  lifecycle invariants, and tenant ownership semantics.
+- [Physical database schema](DATABASE.md): proposed PostgreSQL tables, keys,
+  constraints, indexes, RLS policy intent, and migration-slice boundaries.
 - [Security](SECURITY.md): durable privacy, isolation, evidence, and AI-data
   requirements, with implementation status called out.
 
 ## Domain
 
-- [Claims](domain/claims.md)
+- [Cases and claims](domain/claims.md)
 - [Evidence](domain/evidence.md)
 - [Policies](domain/policies.md)
 - [Responses, submissions, and outcomes](domain/responses.md)
@@ -46,6 +50,10 @@ Use the narrowest authoritative document:
 
 - Product decisions belong in `PRODUCT.md` or a relevant domain document.
 - Implemented system structure belongs in `ARCHITECTURE.md`.
+- Aggregate boundaries, entity relationships, and lifecycle invariants belong
+  in `DATA_MODEL.md`.
+- Physical table shape, constraints, indexes, and RLS policy intent belong in
+  `DATABASE.md`.
 - Durable security requirements and confirmed controls belong in `SECURITY.md`.
 - Task-specific deltas belong in task prompts or active plans, not global docs.
 
