@@ -70,7 +70,7 @@ that User within a Tenant.
 
 #### User
 
-- **Responsibility:** represents one authenticated person used by Auth.js.
+- **Responsibility:** represents one authenticated person used by Better Auth.
 - **Owning tenant:** none; a User is global and may join multiple Tenants.
 - **Lifecycle and identity:** stable opaque identity; authentication accounts,
   sessions, and verification tokens are adapter records around it.
@@ -610,7 +610,7 @@ introduced for MVP.
 
 Tenant ownership rules:
 
-- global scoped: User and Auth.js account/session/verification records;
+- global scoped: User and Better Auth account/session/verification records;
 - tenant root scoped: Tenant, with no `tenant_id` of its own;
 - system scoped: migration metadata, AuditEvent, and the BackgroundJob queue;
 - tenant boundary scoped: Membership, owned by its referenced Tenant and
@@ -632,7 +632,7 @@ parent in Tenant B.
 
 Every tenant-owned use case follows one entry path:
 
-1. authenticate the User through the server-side Auth.js session;
+1. authenticate the User through the server-side Better Auth session;
 2. begin a database transaction using the runtime application role;
 3. set only the transaction-local actor context;
 4. resolve an active Membership for that actor and the requested Tenant under a
@@ -659,7 +659,7 @@ Migration/owner credentials are unavailable to the application and worker.
 - Missing/empty tenant context must fail closed.
 - Tenant and Membership need policies that let a User discover only their own
   active memberships/workspaces and let OWNER actions manage the same Tenant.
-- Global Auth.js tables use narrowly granted adapter access rather than tenant
+- Global Better Auth tables use narrowly granted adapter access rather than tenant
   RLS; they cannot be joined as a shortcut around Membership authorization.
 - Composite tenant foreign keys remain required because RLS does not make a
   cross-tenant relationship valid.
@@ -896,7 +896,7 @@ flowchart LR
 
 The conceptual model no longer carries a competing candidate table list. The
 approved implementation-ready physical design, including
-GLOBAL/TENANT_ROOT/TENANT/SYSTEM classification, Auth.js boundary, table
+GLOBAL/TENANT_ROOT/TENANT/SYSTEM classification, Better Auth boundary, table
 inventory, columns, composite foreign keys, delete behavior, indexes, RLS
 matrix, job claiming, enum strategy, and slice migration boundary, is in
 [`DATABASE.md`](DATABASE.md).
@@ -922,8 +922,9 @@ The following remain open without weakening the conceptual model:
 - LLM provider/model/data terms and provider request-id semantics;
 - job attempt limits, lease duration, backoff, priority, and migration SQL for
   the approved queue/worker policy intent;
-- pinned Auth.js/Drizzle versions and email provider; the GLOBAL table shape is
-  defined in `DATABASE.md` but must be checked against the pinned adapter;
+- generated Better Auth schema/adapter verification and the email provider;
+  versions are selected in `ARCHITECTURE.md`, and the GLOBAL core table shape
+  in `DATABASE.md` must be verified before a Slice 1B-1 migration is created;
 - hosted error-reporting provider and scrubbing configuration;
 - marketplace connector payloads, automated policy ingestion, and autonomous
   submission remain out of scope rather than open MVP schema work.

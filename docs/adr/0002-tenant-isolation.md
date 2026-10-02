@@ -2,6 +2,8 @@
 
 - **Status:** Accepted
 - **Implementation:** NOT IMPLEMENTED
+- **Revision:** 2026-10-01 — Better Auth replaces the original Auth.js choice
+  before authentication implementation; tenant authorization is unchanged.
 
 ## Context
 
@@ -11,12 +13,18 @@ prove authorization to a tenant resource.
 
 ## Decision
 
-Use Auth.js with database-backed sessions and this minimal identity model:
+Use Better Auth with database-backed sessions and this minimal identity model:
 
 - `User`: authenticated person.
 - `Tenant`: seller workspace and ownership boundary.
 - `Membership`: relationship between a user and tenant with role `OWNER`,
   `OPERATOR`, or `REVIEWER`.
+
+Authentication core records are GLOBAL. Better Auth organization/multi-tenant
+and admin/role plugins are not used; they must not introduce a second authority
+for Seller Shield's Tenant, Membership, or roles. Dependency selection and
+Slice 1B-1/1B-2 boundaries are owned by
+[`ARCHITECTURE.md`](../ARCHITECTURE.md#authentication-and-tenant-model--decided-not-implemented).
 
 `OWNER` manages the workspace and can perform all MVP actions. `OPERATOR`
 manages cases, evidence, policies, and drafts. `REVIEWER` can review and
@@ -39,8 +47,10 @@ uses a separate role. Background jobs restore and verify tenant context before
 touching tenant data. UI routing or client filtering is never an authorization
 boundary.
 
-The initial sign-in method is email magic link. The transactional email vendor
-and deployment region remain provider decisions before Slice 1 uses real users.
+The initial sign-in method remains email magic link, implemented only in
+Slice 1B-2 through Better Auth's Magic Link plugin. The transactional email
+vendor and deployment region remain provider decisions before real sign-in;
+they do not block the persistence-only Slice 1B-1.
 
 ## Consequences
 
@@ -52,6 +62,7 @@ and deployment region remain provider decisions before Slice 1 uses real users.
 
 ## References
 
-- <https://authjs.dev/getting-started/session-management/protecting>
-- <https://authjs.dev/getting-started/adapters/drizzle>
+- <https://authjs.dev/getting-started/migrate-to-better-auth>
+- <https://better-auth.com/docs/concepts/session-management>
+- <https://better-auth.com/docs/adapters/drizzle>
 - <https://www.postgresql.org/docs/current/ddl-rowsecurity.html>

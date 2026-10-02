@@ -29,7 +29,7 @@ Use one containerized TypeScript Next.js App Router application with:
 - Route Handlers for uploads, downloads, health, and machine-facing HTTP;
 - Zod at external and provider boundaries;
 - PostgreSQL with Drizzle ORM and reviewed Drizzle Kit SQL migrations;
-- Auth.js database sessions;
+- Better Auth database-backed sessions;
 - private S3-compatible object storage;
 - optional LLM assistance behind a narrow server-side port;
 - HTML-to-PDF generation through pinned Chromium/Playwright;
@@ -85,7 +85,7 @@ seller-shield/
 │  │  ├─ exports/               # package manifest and PDF jobs
 │  │  └─ outcomes/              # seller-entered results and metrics events
 │  ├─ platform/
-│  │  ├─ auth/                  # Auth.js adapter and session translation
+│  │  ├─ auth/                  # Better Auth adapter and session translation
 │  │  ├─ db/                    # Drizzle foundation; tenant boundary is planned
 │  │  ├─ storage/               # S3-compatible implementation
 │  │  ├─ ai/                    # one provider adapter implementation
@@ -139,7 +139,7 @@ services and domain/infrastructure adapters below remain **NOT IMPLEMENTED**.
   validate, build an `AccessContext`, call one application service, and map the
   result to UI/HTTP.
 - Application services own use-case orchestration and authorization checks.
-- Domain modules own states and invariants and do not import Next.js, Auth.js,
+- Domain modules own states and invariants and do not import Next.js, Better Auth,
   Drizzle, S3, Playwright, or an LLM SDK.
 - Infrastructure adapters remain under `src/platform/` and implement narrow
   ports owned by the consuming module.
@@ -212,8 +212,46 @@ tasks.
 
 ## Authentication and tenant model — DECIDED, NOT IMPLEMENTED
 
-Use Auth.js database sessions with email magic-link sign-in. The exact
-transactional email vendor remains **OPEN**.
+On 2026-10-01, the greenfield authentication decision changed from Auth.js to
+Better Auth. Auth.js v5 beta is not approved. The official
+[Auth.js migration guidance](https://authjs.dev/getting-started/migrate-to-better-auth)
+recommends Better Auth for new projects; no Auth.js code or tables had been
+implemented, so this is a design revision, not a data migration.
+
+The selected future direct dependencies are stable `better-auth@1.7.7` and
+`@better-auth/drizzle-adapter@1.7.7`. Both registry versions were verified with
+`pnpm view` on 2026-10-02. This supersedes the initial 1.7.6 selection:
+the [1.7.7 release](https://github.com/better-auth/better-auth/releases/tag/v1.7.7)
+fixes critical Magic Link account takeover and concurrent PostgreSQL requests
+exceeding database-backed rate limits. This does not enable Magic Link or add
+database rate-limit storage to 1B-1. Recheck stable registry versions before
+installation; do not mix unmatched versions without checking compatibility.
+The declared peer ranges cover the current Next.js 16.3.7,
+React 19.3.0, Drizzle ORM 0.45.3, and Drizzle Kit 0.31.11. Installation,
+type compatibility, generated schema, and runtime integration remain
+**NOT IMPLEMENTED / NOT VERIFIED**.
+
+Slice 1B-1 establishes only server-side persistence under `src/platform/auth/`
+using the [official Drizzle adapter](https://better-auth.com/docs/adapters/drizzle)
+with `provider: "pg"`, `schema`, and `usePlural: true` for the existing plural
+table names, plus the existing runtime `DATABASE_URL`. Use the official
+`advanced.database.generateId: "uuid"` strategy, not a custom ID generator.
+PostgreSQL stores sessions; secondary storage, stateless/JWT sessions, and cookie caching
+are not selected. Cookie caching stays disabled so expiry/revocation checks use
+the database. The server boundary uses Better Auth's session API; any required
+Next.js mount uses the official `toNextJsHandler`, not a public debug endpoint.
+No sign-in method, fake provider, or signed-in product state is introduced.
+
+Only when implementing 1B-1, add server-only `BETTER_AUTH_SECRET` (high entropy,
+at least 32 characters) and an explicit `BETTER_AUTH_URL` to local/deployment
+configuration, with safe placeholders in `.env.example`. Missing/invalid
+configuration must fail without disclosing values. The current Slice 1A shell
+does not require these variables, and Next.js retains responsibility for
+application environment loading; `local-env.ts` remains CLI/test-only.
+
+Slice 1B-2 adds the [Magic Link plugin](https://better-auth.com/docs/plugins/magic-link),
+transactional delivery through its `sendMagicLink` callback, and sign-in UI.
+The email vendor/region remain **OPEN** and do not block 1B-1.
 
 Conceptual identity model:
 
@@ -221,11 +259,15 @@ Conceptual identity model:
 - `Tenant`: seller workspace and data-ownership boundary.
 - `Membership`: User-to-Tenant relationship with one role.
 
-Auth.js `User`, `Account`, `Session`, and `VerificationToken` infrastructure is
+Better Auth `User`, `Account`, `Session`, and `Verification` infrastructure is
 GLOBAL rather than tenant-owned. `Tenant` is the TENANT_ROOT and has no
 `tenant_id` of its own; `Membership` and every tenant-domain record are owned by
-that root. Do not add `tenant_id` to Auth.js adapter tables as a substitute for
-Membership authorization.
+that root. Do not add `tenant_id` to Better Auth core tables as a substitute for
+Membership authorization. Do not use Better Auth organization/multi-tenant,
+admin/role, or other authorization plugins: Seller Shield's Tenant/Membership
+model and PostgreSQL RLS remain the single tenant-authorization design for 1C.
+The revised core table contract and pre-migration schema verification gate are
+owned by [`docs/DATABASE.md`](DATABASE.md#global-better-auth-core-tables).
 
 MVP roles:
 

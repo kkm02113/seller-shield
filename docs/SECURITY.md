@@ -7,7 +7,8 @@ unless this document is updated with code and validation references.
 
 ## Status
 
-`DECIDED`: Auth.js database sessions; User/Tenant/Membership roles;
+`DECIDED`: Better Auth database-backed sessions; User identity separate from
+Tenant/Membership roles;
 server-side membership authorization; PostgreSQL RLS and tenant-aware
 relationships; private S3-compatible objects; short-lived authorized URLs;
 SHA-256 for original evidence; point-in-time policy captures; manual-first AI
@@ -33,6 +34,17 @@ and deletion workflows.
 
 ## Tenant isolation and authorization
 
+- Better Auth authenticates a GLOBAL User only. A core Session does not prove
+  Tenant membership or a Seller Shield role. Organization/multi-tenant and
+  admin/role plugins must not compete with the domain authorization model.
+- Slice 1B-1 is persistence-only and remains NOT IMPLEMENTED. Magic Link,
+  delivery, and usable sign-in belong to 1B-2; Tenant/Membership/RLS belong to
+  1C. See the [architecture boundary](ARCHITECTURE.md#authentication-and-tenant-model--decided-not-implemented).
+- Core auth tables use explicit runtime CRUD grants, not ownership or
+  SUPERUSER/BYPASSRLS/schema CREATE. Global adapter access is not tenant access.
+- Database-backed sessions must not silently become stateless/JWT or secondary
+  storage sessions. Cookie caching stays disabled in the foundation so deleted
+  or expired sessions are rechecked against PostgreSQL.
 - Every access to tenant-owned claims, evidence, policies, responses,
   submissions, and outcomes must enforce the tenant boundary.
 - Authentication alone is not authorization. Check the actor's permission for
@@ -103,6 +115,13 @@ and deletion workflows.
 
 ## Credentials and secrets
 
+- Future Better Auth secret/base-URL configuration stays server-only and uses
+  the variables defined in [ARCHITECTURE.md](ARCHITECTURE.md#authentication-and-tenant-model--decided-not-implemented).
+  Validation errors must not include the supplied secret or database URL.
+- Session tokens, verification values, provider tokens, and optional session
+  IP/user-agent fields are sensitive. Retain the official nullable core fields,
+  but decide actual collection/retention before 1B-2 accepts real users; never
+  log these values or treat them as buyer reputation data.
 - Never commit credentials, tokens, private keys, or production secrets.
 - Load secrets through the deployment environment's approved secret facility.
 - Scope credentials to the minimum tenant, provider, permissions, and lifetime

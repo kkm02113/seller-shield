@@ -5,6 +5,14 @@
 > Slice 1B onward remains PLANNED. Execution must follow the root `AGENTS.md`;
 > do not commit or push unless a later task explicitly requests it.
 
+Slice 1B-1's design was revised on 2026-10-01 to Better Auth persistence;
+Auth.js v5 beta is not approved. This revision changes documentation only, not
+dependencies, generated schemas, migrations, or application behavior.
+The design is approved for implementation as of the 2026-10-02 review, using
+registry-verified stable 1.7.7 and `usePlural: true`. First commit the reviewed
+documentation baseline and require a clean working tree; no implementation is
+claimed by this approval.
+
 **Goal:** Deliver the smallest tenant-safe, manual-first workflow that takes a
 real seller claim from intake through evidence review, human-approved response
 package, externally performed submission, and recorded outcome.
@@ -137,7 +145,7 @@ None beyond the product name and documentation routes.
 > and APPROVED on 2026-10-01 after local PostgreSQL 18.6 validation. It includes the
 > empty Drizzle schema, separate runtime/migration URL validation, migration
 > commands, a real `SELECT 1` smoke path, and an explicit `pnpm test:db` gate
-> that fails when no database is configured. Slice 1B (Auth.js/User), 1C
+> that fails when no database is configured. Slice 1B (Better Auth/User), 1C
 > (Tenant/Membership/RLS), 1D (Case/ClaimSnapshot/CaseEvent), and 1E (manual
 > Create → Inbox → Detail) remain PLANNED.
 
@@ -149,9 +157,53 @@ ownership, and runtime CREATE denial were checked as described in
 [`docs/DATABASE.md`](../../DATABASE.md#slice-1a-foundation--implemented-local-validation).
 `.env.local` and tool scratch are ignored; PostgreSQL data lives outside Git.
 Zero SQL migrations and zero product tables remain the approved Slice 1A
-boundary. Slice 1B has not started.
+boundary. Slice 1B implementation has not started.
 
-### Goal
+### Slice 1B-1 — Better Auth persistence foundation
+
+**DECIDED DESIGN / NOT IMPLEMENTED.** Establish only global authentication
+persistence with `better-auth@1.7.7`,
+`@better-auth/drizzle-adapter@1.7.7`, the existing PostgreSQL/Drizzle foundation,
+and database-backed sessions. Version/configuration ownership remains in
+[`ARCHITECTURE.md`](../../ARCHITECTURE.md#authentication-and-tenant-model--decided-not-implemented);
+the exact four-table contract and mappings remain in
+[`DATABASE.md`](../../DATABASE.md#global-better-auth-core-tables).
+
+- Configure the server-only auth boundary, required secret/base URL validation,
+  and existing non-owner runtime database connection. Do not alter the CLI/test
+  environment loader into an application-runtime loader.
+- Verify registry versions again before installing. Use `usePlural: true` with
+  the four plural schema exports and `advanced.database.generateId: "uuid"`.
+- Generate Better Auth's core schema for review, compare it with the physical
+  contract, and resolve UUID, timestamp, field/default/index, and mapping
+  differences **before** generating migration SQL. Then review the four-table
+  migration and narrowly scoped runtime CRUD grants.
+- Validate the real adapter's core persistence and database-session lookup,
+  expiry, and revocation with synthetic fixtures on real PostgreSQL. Direct
+  test fixture setup is not a production sign-in flow; mocked persistence is
+  not integration coverage. Test configuration failures without leaking values.
+- Keep User GLOBAL. Do not add Tenant/Membership/RLS, Better Auth organization
+  or authorization-role plugins, Magic Link, email/password or OAuth sign-in,
+  transactional email, login UI, Case, evidence, AI, storage, or jobs.
+- Do not enable secondary storage, stateless JWT sessions, or cookie caching
+  that bypasses the authoritative database-session lookup.
+
+Acceptance requires reviewed schema/SQL matching the documented core contract,
+real runtime-role adapter/session tests, and the existing application checks
+remaining valid. Local DB absence or unverified generation is a reported
+blocker, not permission to claim passing integration coverage. Implementation
+starts only after the approved documentation has a clean committed baseline.
+
+### Slice 1B-2 / 1C boundary
+
+Slice 1B-2 owns the official Better Auth Magic Link plugin, its `sendMagicLink`
+delivery callback, transactional email provider/region/data terms, and sign-in
+UI. Decide real-user name capture and sensitive auth-data handling before real
+sign-in; the provider is still open and does not block Slice 1B-1. Slice 1C owns
+Seller Shield Tenant/Membership/server authorization/RLS, with no parallel
+organization abstraction in the auth library.
+
+### Whole Slice 1 goal
 
 Let an authenticated seller operator create and review tenant-scoped cases
 through the initial lifecycle without a marketplace connector.
@@ -639,8 +691,8 @@ human approval, or the manual fallback.
 | --- | --- |
 | Application structure | Single containerized TypeScript Next.js App Router modular monolith; [ADR-001](../../adr/0001-single-nextjs-application.md). |
 | Persistence | PostgreSQL with Drizzle ORM and reviewed Drizzle Kit SQL migrations; ADR-001. |
-| Physical schema | GLOBAL Auth.js tables, tenant-owned domain tables with composite tenant FKs/RLS, and a SYSTEM job queue; [`docs/DATABASE.md`](../../DATABASE.md). |
-| Authentication and tenant isolation | Auth.js database sessions, User/Tenant/Membership with `OWNER`/`OPERATOR`/`REVIEWER`, server authorization plus PostgreSQL RLS; [ADR-002](../../adr/0002-tenant-isolation.md). |
+| Physical schema | GLOBAL Better Auth core tables, tenant-owned domain tables with composite tenant FKs/RLS, and a SYSTEM job queue; [`docs/DATABASE.md`](../../DATABASE.md). |
+| Authentication and tenant isolation | Better Auth database sessions and GLOBAL User identity; separate Seller Shield Tenant/Membership with `OWNER`/`OPERATOR`/`REVIEWER`, server authorization plus PostgreSQL RLS; [ADR-002](../../adr/0002-tenant-isolation.md). |
 | Evidence storage/integrity | Private S3-compatible storage, authorized short-lived URLs, immutable original keys, SHA-256; [ADR-003](../../adr/0003-evidence-storage-and-integrity.md). |
 | AI boundary | Manual response drafting is primary; optional provider adapter with validated references; [ADR-004](../../adr/0004-manual-first-ai-boundary.md). |
 | Export | Versioned HTML → PDF through pinned Chromium/Playwright; one PDF in P0; [ADR-005](../../adr/0005-html-to-pdf-export.md). |
@@ -655,7 +707,7 @@ data without the decision; the open option is not a product capability.
 | Decision | Why it matters | Decide by | Blocks Slice 0 | Blocks Slice 1 |
 | --- | --- | --- | --- | --- |
 | Hosting, managed PostgreSQL, and deployment region | Determines production operations, data location, backups, and processor terms. The container/PostgreSQL/S3 topology is already decided. | Before production deployment, not before local Slice 0. | No | No |
-| Transactional email provider and region | Required for real email magic-link sign-in; Auth.js and the tenant/role model are already decided. | Before Slice 1 uses real users. | No | Yes |
+| Transactional email provider and region | Required for real Better Auth Magic Link sign-in; the separate Seller Shield tenant/role model is already decided. | Before Slice 1B-2 uses real users. | No | Yes, 1B-2 only; not 1B-1 |
 | S3-compatible storage vendor and bucket region | Determines provider-specific signed URL/checksum behavior, data location, deletion, and cost; the storage boundary is already decided. | Before Slice 2 accepts real evidence. | No | No |
 | Provisional evidence retention and deletion policy | Real customer evidence cannot be stored responsibly without an initial rule and deletion path. | Before Slice 2 accepts real data. | No | No |
 | LLM provider, approved data terms, region, model boundary, and fallback behavior | Determines optional AI assistance, privacy review, prompt/data flow, observability, failure handling, and cost. It does not block manual drafting. | Before the AI-assisted portion of Slice 4 starts. | No | No |
