@@ -1,2 +1,1 @@
-// Tables are added only by the Slice 1 task that owns their behavior.
-export {};
+export { accounts, sessions, users, verifications } from "./auth.ts";

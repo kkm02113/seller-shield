@@ -10,14 +10,13 @@
 - **OPEN:** a provider or operational choice that can remain unresolved without
   changing the architecture boundary.
 
-As of 2026-10-01 the Slice 0 Next.js shell and Slice 1A PostgreSQL/Drizzle
-foundation are **IMPLEMENTED**; Slice 1A is **APPROVED** after real local
-PostgreSQL 18.6 positive/negative-path validation. Separate runtime and migration
-roles were provisioned and verified in that local instance only. Product
-tables, RLS, storage, authentication, authorization, tenant isolation, AI,
-export, worker, deployment, and product security controls remain **NOT
-IMPLEMENTED**. Local database setup is not production provisioning or proof of
-tenant isolation.
+As of 2026-10-04 the Slice 0 shell, approved Slice 1A PostgreSQL/Drizzle
+foundation, and Slice 1B-1 Better Auth persistence are **IMPLEMENTED** within
+the local validation boundaries below. Four GLOBAL auth tables, database
+sessions, and non-owner runtime CRUD grants exist. Usable sign-in, product
+tables, Tenant/Membership, RLS, storage, tenant authorization/isolation, AI,
+export, worker, and deployment remain **NOT IMPLEMENTED**. Local database setup
+is not production provisioning or proof of tenant isolation.
 
 ## Recommended architecture — DECIDED
 
@@ -67,10 +66,10 @@ filesystem, so deployment must not assume static export semantics.
 
 ## Repository layout
 
-`src/app/`, the two Slice 0 tests, and the Slice 1A database foundation under
-`src/platform/db/` are implemented. `src/modules/`, the remaining platform
-adapters, `src/worker/`, product schema migrations, and the larger test
-hierarchy remain planned and must be added only by the slice that needs them.
+`src/app/`, `src/platform/db/`, `src/platform/auth/`, the single core-auth
+migration, and the corresponding unit/real-DB tests are implemented.
+`src/modules/`, other platform adapters, `src/worker/`, tenant/product migrations,
+and the larger test hierarchy remain planned.
 
 ```text
 seller-shield/
@@ -92,7 +91,7 @@ seller-shield/
 │  │  ├─ pdf/                   # Playwright renderer
 │  │  └─ observability/         # logs, request IDs, error reporting
 │  └─ worker/                   # added only when durable jobs require a process
-├─ drizzle/                     # empty journal now; reviewed SQL later
+├─ drizzle/                     # reviewed core-auth SQL + snapshot/journal
 ├─ tests/
 │  ├─ unit/
 │  ├─ integration/
@@ -127,13 +126,14 @@ fictional business data. React Testing Library and Playwright are not installed
 because there is no interactive component or critical browser workflow yet; a
 server-rendered Vitest test covers the current shell.
 
-## Backend and API — DECIDED; process health IMPLEMENTED
+## Backend and API — DECIDED; health/auth persistence mounts IMPLEMENTED
 
 Next.js runs on the Node.js runtime and hosts the application layer.
 
 Slice 0 implements only `GET /api/health`, returning process status with no
-database, storage, AI, authentication, or marketplace claim. All application
-services and domain/infrastructure adapters below remain **NOT IMPLEMENTED**.
+database, storage, AI, authentication, or marketplace claim. Slice 1B-1 adds
+the official auth mount described below, without enabling sign-in. Product
+application services and other adapters below remain **NOT IMPLEMENTED**.
 
 - Server Actions and Route Handlers are thin adapters. They authenticate,
   validate, build an `AccessContext`, call one application service, and map the
@@ -182,9 +182,9 @@ evidence.
   applied and a reset/transaction strategy that does not hide RLS behavior.
 - Critical browser tests run against the same Postgres-backed application.
 
-Slice 1A implements the Postgres.js/Drizzle connection factory, a server-only
+Slice 1A established the Postgres.js/Drizzle connection factory, a server-only
 application singleton, validated runtime and migration URLs, an intentionally
-empty schema entry point, and Drizzle generate/migrate commands. The runtime
+initially empty schema entry point, and Drizzle generate/migrate commands. The runtime
 smoke command executes `SELECT 1` and fails if PostgreSQL is unavailable. The
 runtime URL and migration-owner URL are separate so later production roles can
 keep ordinary application access distinct from schema ownership.
@@ -196,21 +196,20 @@ exited nonzero with a wrong password, without exposing passwords or connection
 URLs. Database commands load `.env.local`, then `.env`, without replacing
 existing process environment variables. `pnpm test` excludes external-service
 integration tests; `pnpm test:db` is the explicit real-DB gate and fails when
-`DATABASE_URL` is absent. The checked-in `drizzle/` content is only Drizzle's
-empty journal; there is no SQL migration. Migration application creates only
-the Drizzle bookkeeping table, not a product table. Local role privileges and
-the remaining schema boundary are recorded in
+`DATABASE_URL` is absent. At Slice 1A approval, `drizzle/` contained only an
+empty journal and migration application created only bookkeeping. Slice 1B-1
+now adds one reviewed auth migration. Local role privileges and the remaining
+schema boundary are recorded in
 [`docs/DATABASE.md`](DATABASE.md#slice-1a-foundation--implemented-local-validation).
 
 The conceptual model and future schema constraints are defined in
 [`docs/DATA_MODEL.md`](DATA_MODEL.md). The approved physical PostgreSQL table,
 constraint, index, and RLS policy design is in
-[`docs/DATABASE.md`](DATABASE.md). Concrete table definitions, SQL migrations,
-production database-role provisioning, automated test-database lifecycle, and
-RLS remain **NOT IMPLEMENTED** and are created only by later slice-specific
-tasks.
+[`docs/DATABASE.md`](DATABASE.md). Only the four GLOBAL auth table definitions
+and their migration exist. Production role provisioning, automated test-database
+lifecycle, tenant/product tables, and RLS remain **NOT IMPLEMENTED**.
 
-## Authentication and tenant model — DECIDED, NOT IMPLEMENTED
+## Authentication and tenant model
 
 On 2026-10-01, the greenfield authentication decision changed from Auth.js to
 Better Auth. Auth.js v5 beta is not approved. The official
@@ -218,7 +217,7 @@ Better Auth. Auth.js v5 beta is not approved. The official
 recommends Better Auth for new projects; no Auth.js code or tables had been
 implemented, so this is a design revision, not a data migration.
 
-The selected future direct dependencies are stable `better-auth@1.7.7` and
+The installed, exactly pinned direct dependencies are stable `better-auth@1.7.7` and
 `@better-auth/drizzle-adapter@1.7.7`. Both registry versions were verified with
 `pnpm view` on 2026-10-02. This supersedes the initial 1.7.6 selection:
 the [1.7.7 release](https://github.com/better-auth/better-auth/releases/tag/v1.7.7)
@@ -227,11 +226,11 @@ exceeding database-backed rate limits. This does not enable Magic Link or add
 database rate-limit storage to 1B-1. Recheck stable registry versions before
 installation; do not mix unmatched versions without checking compatibility.
 The declared peer ranges cover the current Next.js 16.3.7,
-React 19.3.0, Drizzle ORM 0.45.3, and Drizzle Kit 0.31.11. Installation,
-type compatibility, generated schema, and runtime integration remain
-**NOT IMPLEMENTED / NOT VERIFIED**.
+React 19.3.0, Drizzle ORM 0.45.3, and Drizzle Kit 0.31.11. Frozen-lockfile
+installation, type compatibility, official schema generation/check, and
+runtime-role adapter/session integration were verified locally on 2026-10-02.
 
-Slice 1B-1 establishes only server-side persistence under `src/platform/auth/`
+**Slice 1B-1 — IMPLEMENTED, local validation:** server-side persistence under `src/platform/auth/`
 using the [official Drizzle adapter](https://better-auth.com/docs/adapters/drizzle)
 with `provider: "pg"`, `schema`, and `usePlural: true` for the existing plural
 table names, plus the existing runtime `DATABASE_URL`. Use the official
@@ -242,12 +241,29 @@ the database. The server boundary uses Better Auth's session API; any required
 Next.js mount uses the official `toNextJsHandler`, not a public debug endpoint.
 No sign-in method, fake provider, or signed-in product state is introduced.
 
-Only when implementing 1B-1, add server-only `BETTER_AUTH_SECRET` (high entropy,
+Authentication requests require server-only `BETTER_AUTH_SECRET` (high entropy,
 at least 32 characters) and an explicit `BETTER_AUTH_URL` to local/deployment
 configuration, with safe placeholders in `.env.example`. Missing/invalid
-configuration must fail without disclosing values. The current Slice 1A shell
-does not require these variables, and Next.js retains responsibility for
+configuration fails without disclosing values. The public shell/build does
+not initialize auth; the auth route initializes it lazily and returns a generic
+503 on invalid configuration. Next.js retains responsibility for
 application environment loading; `local-env.ts` remains CLI/test-only.
+
+The official `toNextJsHandler` mounts GET/POST under `/api/auth/[...all]`.
+The pure factory accepts injected DB/config for official offline schema tooling
+and real adapter tests; application credential access is in the `server-only`
+entry point. Auth error logs preserve severity but discard SQL parameters and
+raw error data. No production sign-in or test fixture endpoint is exposed.
+
+Local validation proves adapter User/Account/Session/Verification persistence,
+DB session lookup/expiry/revocation, atomic core verification consumption,
+constraints, actual columns/indexes/ownership, and runtime DDL denial. This is
+not a verified Magic Link flow or tenant authorization. Default `pnpm build`
+(Turbopack) passed in the working tree and a fresh Windows snapshot on
+2026-10-04, closing the local build gate without a webpack opt-out or repository
+configuration change. Linux/CI execution remains unverified; the historical
+native-SWC policy block and audit evidence are recorded in the
+[active plan](plans/active/0001-mvp-foundation.md#slice-1b-1--better-auth-persistence-foundation).
 
 Slice 1B-2 adds the [Magic Link plugin](https://better-auth.com/docs/plugins/magic-link),
 transactional delivery through its `sendMagicLink` callback, and sign-in UI.

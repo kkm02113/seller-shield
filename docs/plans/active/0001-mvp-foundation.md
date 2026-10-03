@@ -2,16 +2,19 @@
 
 > **Status:** Active implementation plan. Slice 0 is IMPLEMENTED. Slice 1A
 > is IMPLEMENTED and APPROVED after real-PostgreSQL validation on 2026-10-01;
-> Slice 1B onward remains PLANNED. Execution must follow the root `AGENTS.md`;
+> Slice 1B-1 persistence is IMPLEMENTED and APPROVED within the local validation
+> boundary below on 2026-10-04;
+> Slice 1B-2 onward remains PLANNED. Execution must follow the root `AGENTS.md`;
 > do not commit or push unless a later task explicitly requests it.
 
 Slice 1B-1's design was revised on 2026-10-01 to Better Auth persistence;
-Auth.js v5 beta is not approved. This revision changes documentation only, not
+Auth.js v5 beta is not approved. That design-only revision changed documentation, not
 dependencies, generated schemas, migrations, or application behavior.
 The design is approved for implementation as of the 2026-10-02 review, using
-registry-verified stable 1.7.7 and `usePlural: true`. First commit the reviewed
-documentation baseline and require a clean working tree; no implementation is
-claimed by this approval.
+registry-verified stable 1.7.7 and `usePlural: true`. Implementation started from
+clean `Test` at `b7d773c50e319439b6a6d3354313ac898bef5139`, matching local HEAD,
+origin/Test, and remote Test. The documentation baseline was already committed;
+no new documentation commit or history rewrite was performed.
 
 **Goal:** Deliver the smallest tenant-safe, manual-first workflow that takes a
 real seller claim from intake through evidence review, human-approved response
@@ -32,10 +35,10 @@ decided in [`docs/ARCHITECTURE.md`](../../ARCHITECTURE.md) and `docs/adr/`.
 The conceptual data model is decided in
 [`docs/DATA_MODEL.md`](../../DATA_MODEL.md), and the implementation-ready
 physical PostgreSQL design is decided in
-[`docs/DATABASE.md`](../../DATABASE.md). Application shell files, an empty
-Drizzle schema entry point, database connection tooling, and migration commands
-now exist, with separate runtime/migration roles verified in a local instance.
-Product table definitions, SQL migrations, production role provisioning, RLS
+[`docs/DATABASE.md`](../../DATABASE.md). Application shell, database tooling,
+four core-auth tables, one migration, and Better Auth configuration now exist,
+with separate runtime/migration roles verified locally. Product-domain tables,
+production role provisioning, RLS
 policies, and all later product code remain unimplemented until later slices.
 Provider selections explicitly left open below are not capabilities.
 
@@ -143,9 +146,10 @@ None beyond the product name and documentation routes.
 
 > **Implementation status:** Slice 1A database infrastructure is IMPLEMENTED
 > and APPROVED on 2026-10-01 after local PostgreSQL 18.6 validation. It includes the
-> empty Drizzle schema, separate runtime/migration URL validation, migration
+> initially empty Drizzle schema, separate runtime/migration URL validation, migration
 > commands, a real `SELECT 1` smoke path, and an explicit `pnpm test:db` gate
-> that fails when no database is configured. Slice 1B (Better Auth/User), 1C
+> that fails when no database is configured. Slice 1B-1 persistence now exists;
+> Slice 1B-2 (sign-in), 1C
 > (Tenant/Membership/RLS), 1D (Case/ClaimSnapshot/CaseEvent), and 1E (manual
 > Create → Inbox → Detail) remain PLANNED.
 
@@ -156,16 +160,16 @@ password and emitted no password or connection URL. Actual role flags,
 ownership, and runtime CREATE denial were checked as described in
 [`docs/DATABASE.md`](../../DATABASE.md#slice-1a-foundation--implemented-local-validation).
 `.env.local` and tool scratch are ignored; PostgreSQL data lives outside Git.
-Zero SQL migrations and zero product tables remain the approved Slice 1A
-boundary. Slice 1B implementation has not started.
+Zero SQL migrations and zero product tables were the approved Slice 1A
+boundary. Slice 1B-1 now adds only the core-auth migration below.
 
 ### Slice 1B-1 — Better Auth persistence foundation
 
-**DECIDED DESIGN / NOT IMPLEMENTED.** Establish only global authentication
+**IMPLEMENTED, APPROVED LOCAL VALIDATION (2026-10-04).** Only global authentication
 persistence with `better-auth@1.7.7`,
 `@better-auth/drizzle-adapter@1.7.7`, the existing PostgreSQL/Drizzle foundation,
 and database-backed sessions. Version/configuration ownership remains in
-[`ARCHITECTURE.md`](../../ARCHITECTURE.md#authentication-and-tenant-model--decided-not-implemented);
+[`ARCHITECTURE.md`](../../ARCHITECTURE.md#authentication-and-tenant-model);
 the exact four-table contract and mappings remain in
 [`DATABASE.md`](../../DATABASE.md#global-better-auth-core-tables).
 
@@ -193,6 +197,44 @@ real runtime-role adapter/session tests, and the existing application checks
 remaining valid. Local DB absence or unverified generation is a reported
 blocker, not permission to claim passing integration coverage. Implementation
 starts only after the approved documentation has a clean committed baseline.
+
+Initial validation (2026-10-02): `pnpm install --frozen-lockfile`, `pnpm check` (35 unit tests),
+official `auth@1.7.7 generate` / `check schema`, `pnpm db:check`, reviewed
+`pnpm db:generate`, `pnpm db:migrate`, `pnpm db:grant-auth`, and `pnpm test:db`
+(12 real-DB tests) passed. Repeated generation/migration produced no new schema
+change. Default `pnpm build` failed because Windows application-control policy
+blocked native SWC required by Turbopack; `pnpm build --webpack` passed using
+WASM as a diagnostic fallback, not the default build gate. No script, type
+check, or host security policy was weakened.
+
+Release-gate audit (2026-10-04): default `pnpm build` now passes with native
+Turbopack both in the working tree and a fresh Windows snapshot. All 67
+Git-visible source files matched by SHA-256 before and after snapshot validation,
+including the uncommitted implementation over baseline `b7d773c`. Node
+24.19.0, pnpm 11.19.0, and the unchanged lockfile were used; no `node_modules`,
+`.next`, `.env.local`, or `.superpowers` was copied. Frozen-lockfile installation,
+`pnpm check` (35 tests), and default build passed in the snapshot. In the working
+tree, `pnpm check`, `pnpm test:db` (12 real-DB tests), `pnpm db:check`,
+`pnpm db:migrate`, `pnpm db:grant-auth`, and `git diff --check` passed after
+restarting the existing local PostgreSQL cluster.
+
+The historical failure occurred before application compilation while loading
+`@next/swc-win32-x64-msvc@16.3.7` / `next-swc.win32-x64-msvc.node`. Windows
+Code Integrity events 3033 and 3077 on 2026-10-02 identify policy
+`VerifiedAndReputableDesktop` and status `0xc0e90002`. Native loading succeeds
+in the audit; why the earlier block no longer reproduces is UNKNOWN. No host
+security policy, build configuration, dependency, or authentication behavior
+was changed, and no webpack fallback was needed. Linux validation remains
+unverified: WSL is not installed, Docker is unavailable, and no CI was added.
+Approval is limited to local persistence validation, not sign-in, tenant
+authorization, Linux deployment, or production provisioning.
+
+Final fresh-context review found one test-isolation issue: Better Auth's internal
+Verification lookup also globally prunes expired rows. Test read assertions now
+use identifier-scoped adapter reads; an unrelated expired sentinel regression
+failed before the correction and passed after it. Production cleanup settings
+were not changed. Multi-process/repeated-identifier sign-in semantics remain
+1B-2 validation, not a claim from the single-row concurrency fixture here.
 
 ### Slice 1B-2 / 1C boundary
 

@@ -1,9 +1,8 @@
 # Seller Shield security and privacy
 
-These are durable requirements and approved architecture controls for future
-implementation. Slice 0 contains only a public development shell and
-process-health route; none of the controls below is claimed as implemented
-unless this document is updated with code and validation references.
+These are durable requirements and approved architecture controls. Only the
+Slice 1A/1B-1 local database/auth persistence controls identified below are
+implemented; the public shell still contains no tenant/product workflow.
 
 ## Status
 
@@ -14,8 +13,17 @@ relationships; private S3-compatible objects; short-lived authorized URLs;
 SHA-256 for original evidence; point-in-time policy captures; manual-first AI
 boundary; structured logs and attributable audit/domain events.
 
-`NOT IMPLEMENTED`: Every control above, including authentication,
-authorization, RLS, object access, hashing, logging, audit events, and provider
+`IMPLEMENTED, LOCAL VALIDATION`: GLOBAL auth persistence, database-session
+lookup/expiry/revocation with cookie caching disabled, validated server-only
+auth environment access, redacted auth errors, and non-owner runtime CRUD
+grants. Code lives in `src/platform/auth/`, `src/platform/db/schema/auth.ts`,
+and `scripts/db-grant-auth.ts`; real PostgreSQL checks are in
+`tests/auth-adapter.integration.test.ts` and
+`tests/auth-database-negative.integration.test.ts`. This is not usable sign-in
+or proof of tenant isolation/production deployment.
+
+`NOT IMPLEMENTED`: Magic Link/delivery/login, tenant authorization/RLS, object
+access, evidence hashing, general structured logging/audit events, and provider
 data controls.
 
 `OPEN`: Hosting/provider regions, transactional email provider, object-storage
@@ -37,9 +45,9 @@ and deletion workflows.
 - Better Auth authenticates a GLOBAL User only. A core Session does not prove
   Tenant membership or a Seller Shield role. Organization/multi-tenant and
   admin/role plugins must not compete with the domain authorization model.
-- Slice 1B-1 is persistence-only and remains NOT IMPLEMENTED. Magic Link,
+- Slice 1B-1 is implemented and persistence-only. Magic Link,
   delivery, and usable sign-in belong to 1B-2; Tenant/Membership/RLS belong to
-  1C. See the [architecture boundary](ARCHITECTURE.md#authentication-and-tenant-model--decided-not-implemented).
+  1C. See the [architecture boundary](ARCHITECTURE.md#authentication-and-tenant-model).
 - Core auth tables use explicit runtime CRUD grants, not ownership or
   SUPERUSER/BYPASSRLS/schema CREATE. Global adapter access is not tenant access.
 - Database-backed sessions must not silently become stateless/JWT or secondary
@@ -115,9 +123,12 @@ and deletion workflows.
 
 ## Credentials and secrets
 
-- Future Better Auth secret/base-URL configuration stays server-only and uses
-  the variables defined in [ARCHITECTURE.md](ARCHITECTURE.md#authentication-and-tenant-model--decided-not-implemented).
+- Better Auth secret/base-URL configuration stays server-only and uses
+  the variables defined in [ARCHITECTURE.md](ARCHITECTURE.md#authentication-and-tenant-model).
   Validation errors must not include the supplied secret or database URL.
+- The auth logger discards raw error arguments/SQL parameters, preserving only
+  severity and a static message. Auth configuration errors return a static 503;
+  do not add raw errors/tokens to Route Handler logs or responses.
 - Session tokens, verification values, provider tokens, and optional session
   IP/user-agent fields are sensitive. Retain the official nullable core fields,
   but decide actual collection/retention before 1B-2 accepts real users; never

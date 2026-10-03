@@ -1,7 +1,8 @@
 # ADR-002: Tenant isolation and authorization
 
 - **Status:** Accepted
-- **Implementation:** NOT IMPLEMENTED
+- **Implementation:** Tenant/Membership/authorization/RLS NOT IMPLEMENTED;
+  Slice 1B-1 GLOBAL auth persistence is locally implemented, not usable sign-in.
 - **Revision:** 2026-10-01 — Better Auth replaces the original Auth.js choice
   before authentication implementation; tenant authorization is unchanged.
 
@@ -24,7 +25,7 @@ Authentication core records are GLOBAL. Better Auth organization/multi-tenant
 and admin/role plugins are not used; they must not introduce a second authority
 for Seller Shield's Tenant, Membership, or roles. Dependency selection and
 Slice 1B-1/1B-2 boundaries are owned by
-[`ARCHITECTURE.md`](../ARCHITECTURE.md#authentication-and-tenant-model--decided-not-implemented).
+[`ARCHITECTURE.md`](../ARCHITECTURE.md#authentication-and-tenant-model).
 
 `OWNER` manages the workspace and can perform all MVP actions. `OPERATOR`
 manages cases, evidence, policies, and drafts. `REVIEWER` can review and

@@ -10,7 +10,8 @@ indexes, deletion behavior, and Row-Level Security policy intent.
 - **DECIDED DESIGN / NOT IMPLEMENTED:** the product tables, columns,
   relationships, RLS policies, worker roles, and queue behavior below remain
   approved design, not an implemented business schema. The Slice 1A
-  infrastructure/local-role exception is recorded separately below.
+  infrastructure/local-role and four GLOBAL auth-table exceptions are recorded
+  separately below. No tenant/product-domain table has been implemented.
 - **OPEN:** the operational and provider choices listed at the end remain open.
 - **OUT OF SCOPE:** this document does not contain migration SQL, TypeScript
   Drizzle definitions, or application code; the local validation record is not
@@ -20,9 +21,9 @@ If sources conflict, domain meaning and the Case lifecycle remain authoritative
 in `docs/domain/`; aggregate invariants remain authoritative in
 `DATA_MODEL.md`; this document owns physical table shape and database policy
 intent. Better Auth versions are selected in
-[`ARCHITECTURE.md`](ARCHITECTURE.md#authentication-and-tenant-model--decided-not-implemented).
-Generated schema and adapter compatibility must be verified before translating
-the auth design into migration SQL; neither has been generated yet.
+[`ARCHITECTURE.md`](ARCHITECTURE.md#authentication-and-tenant-model).
+The official Slice 1B-1 generation comparison is recorded below; actual
+adapter/database validation must pass before the implementation is approved.
 
 ## Slice 1A foundation — IMPLEMENTED, local validation
 
@@ -36,11 +37,40 @@ no database/schema CREATE privilege or membership in the migration role.
 
 Installation, cluster data, and admin credentials are local-only outside the
 repository; runtime/migration URLs are in ignored `.env.local`. There is no
-committed production role provisioner. The Drizzle schema and migration journal
-are empty: zero SQL migrations and zero product tables. Running `db:migrate`
-creates only `drizzle.__drizzle_migrations`, with zero applied rows. Authentication
-tables, tenant tables, RLS, worker roles, and the 39-table P0 design are not
-implemented. This role separation does not itself establish tenant isolation.
+committed production role provisioner. At Slice 1A approval the schema/journal
+were empty, with only `drizzle.__drizzle_migrations` bookkeeping and zero applied
+rows. Slice 1B-1's current four-table exception follows. Tenant tables, RLS,
+worker roles, and the rest of the 39-table P0 design are not implemented.
+Role separation does not itself establish tenant isolation.
+
+## Slice 1B-1 foundation — IMPLEMENTED, local validation
+
+On 2026-10-02, `drizzle/0000_auth-foundation.sql` was reviewed before application
+and applied to the existing local PostgreSQL 18.6 database using the migration
+owner. It creates exactly the four GLOBAL core tables below, with 34 columns,
+two cascading User FKs, unique email/session token, and the approved indexes.
+The migration journal has one applied row; repeated generation found no schema
+changes and repeated migration was a no-op. No domain/plugin table was added.
+
+`pnpm db:grant-auth` separately grants only SELECT/INSERT/UPDATE/DELETE on these
+four tables to the role named by `DATABASE_URL`, using `DATABASE_MIGRATION_URL`.
+It requires distinct roles on the same DB, checks role flags/inheritance and
+migration ownership, and refuses elevated/schema-creating runtime roles. It
+does not provision roles or grant ALL TABLES, ownership, TRUNCATE, REFERENCES,
+TRIGGER, schema CREATE, or migration-bookkeeping access. New deployment roles
+still require explicit provisioning outside this command.
+
+Real adapter/session tests used `seller_shield_app`, not the owner. They
+verified UUID returns, core CRUD, update timestamps, session lookup/expiry/
+revocation, atomic Verification consumption, cleanup cascades, duplicate email/
+token and invalid-FK rejection, actual columns/defaults/indexes/constraints and
+ownership, and CREATE/ALTER denial. Missing runtime URL and wrong runtime
+password tests fail without falling back to the migration URL or exposing
+credentials. Fixture cleanup deletes only run-specific synthetic rows; no
+database reset/TRUNCATE, test provider, or real sign-in is introduced.
+Test read assertions deliberately use identifier-scoped adapter reads rather
+than the internal lookup's global expired-row cleanup. A real expired sentinel
+regression verifies isolation; production verification cleanup is unchanged.
 
 ## Design choices considered
 
@@ -184,7 +214,7 @@ catalog table is proposed.
 
 ## GLOBAL Better Auth core tables
 
-**DECIDED DESIGN / NOT IMPLEMENTED:** Slice 1B-1 replaces the unimplemented
+**IMPLEMENTED, locally validated:** Slice 1B-1 replaces the unimplemented
 Auth.js contract with Better Auth 1.7.7's four core models. The authoritative
 upstream field/required/default/index contract is the
 [pinned core source](https://raw.githubusercontent.com/better-auth/better-auth/v1.7.7/packages/core/src/db/get-tables.ts),
@@ -277,12 +307,26 @@ has `tenant_id`, tenant RLS, or Seller Shield authorization roles.
   metadata; storage/consumption semantics must be checked with Slice 1B-2's
   actual Magic Link configuration.
 
+### Slice 1B-1 generation review — 2026-10-02
+
+The pinned `auth@1.7.7 generate` CLI was run offline against the selected
+configuration; its scratch output is not application code. Its four plural
+tables, native UUID defaults/FKs, canonical properties with snake-case SQL
+columns, required/nullable fields, unique email/token, non-unique verification
+fields, cascade deletion, and update callbacks match the approved contract.
+Seller Shield intentionally changes generated `timestamp` to `timestamptz`,
+adds the two approved expiry indexes, and gives index names snake-case spelling.
+`defaultRandom()` expresses the same PostgreSQL UUID function. Generated
+relation helpers are not needed because experimental joins are not enabled.
+No old Auth.js constraints or plugin tables are carried forward.
+
 Before creating the Slice 1B-1 migration, compare the generated Better Auth
 schema against every field, nullability/default, UUID/FK type, timestamp,
 index, and mapping above. Review the final Drizzle schema and generated SQL;
 prove adapter CRUD and session expiry/revocation on real PostgreSQL using the
-non-owner runtime role. No generated schema or migration exists at this design
-revision. The only auth migration target is these four GLOBAL tables plus
+non-owner runtime role. These checks passed for the current single migration;
+repeat the generation comparison before future auth-schema changes. The only
+auth migration target is these four GLOBAL tables plus
 their constraints/indexes and narrowly scoped runtime grants. No organization
 plugin, tenant tables, RLS, database rate-limit table, or other plugin schema
 belongs in this migration. The foundation must not enable secondary storage or
@@ -1235,7 +1279,7 @@ The full model is designed now, but migrations remain slice-scoped:
 - **Slice 1A:** implemented migration mechanism and real PostgreSQL smoke/test
   path; empty schema, no product SQL migrations.
 - **Slice 1B-1:** Better Auth persistence foundation; only the four GLOBAL core
-  tables above, runtime grants, and real adapter integration tests.
+  tables above, runtime grants, and real adapter integration tests are implemented.
 - **Slice 1B-2:** Magic Link, transactional email, and sign-in UI. Review any
   plugin-specific schema needs explicitly; no tenant/domain tables.
 - **Slice 1C:** `tenants`, `memberships`, and their RLS policies/tests. Seller
