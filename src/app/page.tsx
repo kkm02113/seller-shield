@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function HomePage() {
   return (
     <main className="shell">
@@ -8,10 +10,11 @@ export default function HomePage() {
         </h1>
         <p className="status">No cases or marketplace data are available yet.</p>
         <p>
-          Authentication, integrations, and product workflows are intentionally
-          not implemented in this foundation slice.
+          Email sign-in is available for development verification. Integrations
+          and seller product workflows are not implemented yet.
         </p>
         <a href="/api/health">View process health</a>
+        <p><Link href="/sign-in">이메일 로그인 검증</Link></p>
       </section>
     </main>
   );

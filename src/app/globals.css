@@ -69,3 +69,13 @@ a {
   color: #1f6249;
   font-weight: 700;
 }
+
+.auth-panel h1 { font-size: clamp(1.75rem, 6vw, 2.5rem); line-height: 1.25; }
+.auth-form { display: grid; gap: 0.8rem; margin-top: 1.75rem; }
+.auth-form label { font-weight: 650; }
+.auth-form input { width: 100%; padding: 0.85rem; border: 1px solid #9daf9f; border-radius: 0.5rem; font: inherit; }
+.auth-form button { padding: 0.9rem; border: 0; border-radius: 0.5rem; background: #1f6249; color: white; font: inherit; font-weight: 650; cursor: pointer; }
+.auth-form button:disabled { background: #60756b; cursor: wait; }
+.auth-form :focus-visible { outline: 3px solid #35785f; outline-offset: 3px; }
+.auth-error { color: #9b2424; }
+.auth-note { font-size: 0.9rem; color: #4c6156; }

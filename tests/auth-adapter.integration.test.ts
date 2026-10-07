@@ -83,7 +83,7 @@ describe("Better Auth ↔ Drizzle ↔ real PostgreSQL", () => {
       where n.nspname = 'public' and c.relkind = 'r'`;
     const [databaseOwner] = await connection.client`select r.rolname as owner from pg_database d
       join pg_roles r on r.oid = d.datdba where d.datname = current_database()`;
-    expect(columns).toHaveLength(34);
+    expect(columns).toHaveLength(38);
     for (const table of Object.values(schema)) {
       const name = getTableName(table);
       const tableColumns = getTableColumns(table);
@@ -101,7 +101,7 @@ describe("Better Auth ↔ Drizzle ↔ real PostgreSQL", () => {
       expect(owners.find((record) => record.relname === name)?.owner).toBe(databaseOwner.owner);
     }
     expect(constraints.filter((constraint) => constraint.contype === "u").map((constraint) => constraint.definition).sort())
-      .toEqual(["UNIQUE (email)", "UNIQUE (token)"]);
+      .toEqual(["UNIQUE (email)", "UNIQUE (key)", "UNIQUE (token)"]);
     expect(constraints.filter((constraint) => constraint.contype === "f").map((constraint) => constraint.definition))
       .toEqual(["FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE", "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE"]);
     // These defaults intentionally follow the generator; updates are Drizzle callbacks, not DB triggers.
@@ -226,7 +226,7 @@ describe("Better Auth ↔ Drizzle ↔ real PostgreSQL", () => {
       has_table_privilege(current_user, c.oid, 'TRIGGER') as trigger
       from pg_class c join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'public' and c.relkind = 'r' order by c.relname`;
-    expect(tables.map((table) => table.relname)).toEqual(["accounts", "sessions", "users", "verifications"]);
+    expect(tables.map((table) => table.relname)).toEqual(["accounts", "rate_limits", "sessions", "users", "verifications"]);
     for (const table of tables) {
       expect([table.runtime_owner, table.relrowsecurity, table.relforcerowsecurity, table.truncate, table.refs, table.trigger])
         .toEqual([false, false, false, false, false, false]);

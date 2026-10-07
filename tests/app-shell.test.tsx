@@ -11,5 +11,8 @@ describe("Seller Shield application shell", () => {
     expect(html).toContain("셀러방패");
     expect(html).toContain("MVP development shell");
     expect(html).toContain("No cases or marketplace data are available yet.");
+    expect(html).toContain('href="/sign-in"');
+    expect(html).toContain("development verification");
+    expect(html).not.toContain("Authentication, integrations");
   });
 });

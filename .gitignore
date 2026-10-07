@@ -8,6 +8,8 @@
 
 # Test and TypeScript output
 /coverage/
+/test-results/
+/playwright-report/
 *.tsbuildinfo
 
 # Local environment and secrets

@@ -1,7 +1,7 @@
 # Seller Shield security and privacy
 
 These are durable requirements and approved architecture controls. Only the
-Slice 1A/1B-1 local database/auth persistence controls identified below are
+Slice 1A/1B-1/1B-2 local database/auth controls identified below are
 implemented; the public shell still contains no tenant/product workflow.
 
 ## Status
@@ -16,21 +16,51 @@ boundary; structured logs and attributable audit/domain events.
 `IMPLEMENTED, LOCAL VALIDATION`: GLOBAL auth persistence, database-session
 lookup/expiry/revocation with cookie caching disabled, validated server-only
 auth environment access, redacted auth errors, and non-owner runtime CRUD
-grants. Code lives in `src/platform/auth/`, `src/platform/db/schema/auth.ts`,
-and `scripts/db-grant-auth.ts`; real PostgreSQL checks are in
-`tests/auth-adapter.integration.test.ts` and
-`tests/auth-database-negative.integration.test.ts`. This is not usable sign-in
-or proof of tenant isolation/production deployment.
+grants; Magic Link hashed single-use tokens, non-consuming confirmation, fixed
+redirects, server-side name onboarding, and official DB IP/path limiting.
+Code lives in `src/platform/auth/`, `src/platform/email/`, `src/platform/db/schema/`
+and auth pages; real PostgreSQL and Edge checks use synthetic/captured email.
+This is not proof of real Resend delivery, tenant isolation or production deployment.
 
-`NOT IMPLEMENTED`: Magic Link/delivery/login, tenant authorization/RLS, object
+`NOT IMPLEMENTED`: tenant authorization/RLS, object
 access, evidence hashing, general structured logging/audit events, and provider
 data controls.
 
-`OPEN`: Hosting/provider regions, transactional email provider, object-storage
+`OPEN`: Hosting region, operational session IP/User-Agent and trusted proxy/IP
+decisions, object-storage
 vendor, LLM vendor/model, error-reporting vendor, concrete retention periods,
 and deletion workflows.
 
 ## PII and customer data
+
+### Slice 1B-2 controls — IMPLEMENTED, local validation
+
+Magic Link uses hashed tokens, 300-second expiry and upstream atomic single-use
+consumption. Email links use a fragment on a non-consuming confirmation page;
+only explicit user action requests verification. Fixed same-origin callbacks,
+no-store/no-referrer auth pages and no analytics/external assets reduce leakage;
+they do not guarantee protection from every scanner. Email tracking must be OFF
+in external domain settings, which remain unverified.
+Auth HTTP calls preserve upstream CSRF/origin checks and database-backed IP/path
+limits (5/60s for Magic Link). The 60-second resend countdown is UX only;
+server-enforced per-email cooldown is deferred. Never mix email/HMAC keys into
+the vendor-owned rate-limit table or log bearer URLs, verification values,
+sessions, provider payloads, or recipient addresses.
+
+Resend is DECIDED for implementation, with Tokyo sending and US data storage;
+current Free/Pro/Scale provider retention is 30 days ([provider policy](https://resend.com/security/gdpr),
+checked 2026-10-04). Sending region does not select storage region
+([region documentation](https://resend.com/docs/dashboard/domains/regions)). REAL-CUSTOMER PRODUCTION
+USE IS BLOCKED until overseas processing/retention policies are reviewed and
+accepted. Real delivery, Tokyo domain/DNS/API key and tracking settings remain
+unverified and require an independent delivery gate. Capture
+senders belong only in tests. Missing mail configuration must fail delivery,
+not simulate success or prevent public-shell builds.
+
+Session IP/User-Agent handling and proxy/IP trust remain OPEN. Keep official
+core fields/behavior; no nulling hook, dropped columns, or disableIpTracking
+change merely to claim non-collection. Authentication/onboarding never grants
+Tenant access. See the [implemented flow](ARCHITECTURE.md#slice-1b-2--implemented-local-validation).
 
 - Collect and expose only data needed for the case workflow.
 - Treat claim, order, buyer, seller, message, address, contact, and evidence

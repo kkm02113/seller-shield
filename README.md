@@ -10,18 +10,20 @@
 
 ## 현재 상태
 
-현재는 MVP의 개발·DB·인증 저장 기반까지 구현된 단계입니다.
+현재는 MVP의 개발·DB 기반과 이메일 인증 흐름까지 로컬 검증한 단계입니다.
 
 | 단계 | 구현 범위 | 상태 |
 | --- | --- | --- |
 | Slice 0 | Next.js 개발용 셸, 프로세스 헬스체크 | 구현·로컬 검증 완료 |
 | Slice 1A | PostgreSQL 연결, Drizzle 설정, migration 기반 | 구현·로컬 검증 완료 |
 | Slice 1B-1 | Better Auth 핵심 테이블, DB 세션, 런타임 CRUD 권한 | 구현·로컬 검증 완료 |
+| Slice 1B-2 | Magic Link, 확인 화면, 이름 입력, 세션·로그아웃 | 구현·캡처 메일/실DB/Edge 검증; 실제 메일 발송 미검증 |
 
-**아직 구현하지 않은 것:** 사용자 로그인, Tenant/Membership·RLS,
+**아직 구현하지 않은 것:** Tenant/Membership·RLS,
 케이스·증거 관리, AI 지원, 마켓플레이스 연동, PDF 내보내기.
 현재 홈 화면에는 케이스나 마켓플레이스 데이터가 없습니다.
-인증 저장 기반은 실제 로그인 기능이나 테넌트 격리의 완성을 의미하지 않습니다.
+인증은 사용자 식별만 제공합니다. 판매자 조직의 권한이나 테넌트 격리는 아직 없습니다.
+실제 고객 운영은 [보안 문서의 미해결 승인 조건](docs/SECURITY.md#slice-1b-2-controls--implemented-local-validation)으로 차단되어 있습니다.
 
 다음 단계와 검증 범위는 [MVP 구현 계획](docs/plans/active/0001-mvp-foundation.md)에서 확인할 수 있습니다.
 
@@ -32,7 +34,8 @@
 | 애플리케이션 | Next.js App Router · React · TypeScript |
 | 데이터베이스 | PostgreSQL · Drizzle ORM · Drizzle Kit |
 | 인증 기반 | Better Auth · 공식 Drizzle adapter · DB 세션 |
-| 코드 검증 | strict TypeScript · ESLint · Vitest |
+| 이메일 | Resend adapter · 얇은 EmailSender 경계 |
+| 코드 검증 | strict TypeScript · ESLint · Vitest · React Testing Library · Playwright |
 
 정확한 패키지 버전은 [package.json](package.json)과 [pnpm-lock.yaml](pnpm-lock.yaml)을 기준으로 합니다.
 
@@ -80,6 +83,8 @@ if (-not (Test-Path .env.local)) {
 | `DATABASE_MIGRATION_URL` | 별도 schema-owner 계정의 migration·권한 부여용 URL |
 | `BETTER_AUTH_SECRET` | 인증 요청용 랜덤 비밀키. 최소 32자이며 예제 placeholder는 사용할 수 없음 |
 | `BETTER_AUTH_URL` | 인증 요청용 origin. 로컬은 `http://localhost:3000`, 배포 환경은 HTTPS |
+| `RESEND_API_KEY` | 실제 메일 발송에만 필요한 서버 전용 API key |
+| `AUTH_EMAIL_FROM` | Resend에서 검증한 도메인의 발신 이메일 주소 |
 
 비밀키는 다음 명령어로 생성한 뒤 `BETTER_AUTH_SECRET`에 설정합니다.
 
@@ -96,13 +101,22 @@ pnpm db:grant-auth
 pnpm test:db
 ```
 
-현재 migration은 `users`, `accounts`, `sessions`, `verifications` 네 GLOBAL 인증 테이블만 생성합니다.
+현재 두 migration은 `users`, `accounts`, `sessions`, `verifications`와 공식 제한 저장용
+`rate_limits`만 생성합니다. 제품 도메인 테이블은 없습니다.
 `db:grant-auth`는 같은 DB의 별도 migration 계정으로 이 테이블들의 CRUD 권한만 부여하며,
 런타임 계정에 소유권·schema CREATE 권한을 주거나 계정을 생성하지 않습니다.
 자세한 범위는 [인증 DB 기반 문서](docs/DATABASE.md#slice-1b-1-foundation--implemented-local-validation)를 참고하세요.
 
-인증 handler는 `/api/auth/[...all]`에 연결되어 있지만 로그인 방식은 아직 활성화되지 않았습니다.
+인증 handler는 `/api/auth/[...all]`에 연결되어 있습니다. `/sign-in`에서 이메일을 입력하면
+메일의 `/auth/verify#token=...` 링크를 열고 **로그인 계속**을 눌러 인증합니다.
+처음에는 `/onboarding`에서 이름을 입력하고 `/app`에 진입합니다. `/app`은 인증 확인용 화면입니다.
 인증 설정이 없거나 잘못되면 일반적인 503 응답으로 실패하며 비밀값을 노출하지 않습니다.
+메일 설정이 없거나 발송이 실패하면 성공으로 처리하지 않습니다.
+
+실제 발송에는 Resend 계정·API key·발신 도메인의 SPF/DKIM 검증이 필요합니다.
+도메인 생성 시 Tokyo를 선택하고 open/click tracking을 끄세요. 이 외부 설정은 아직 검증하지 않았습니다.
+해외 처리·보관 정책 검토/수락 전에는 실제 고객에게 사용하지 마세요.
+세부 결정과 검증 경계는 [Slice 1B-2 문서](docs/ARCHITECTURE.md#slice-1b-2--implemented-local-validation)를 따릅니다.
 
 `.env.local`은 커밋하지 말고, migration 계정을 앱 런타임에 사용하지 마세요.
 DB 명령어는 기존 프로세스 환경 변수 → `.env.local` → `.env` 순서로 값을 우선합니다.
@@ -119,10 +133,11 @@ DB 명령어는 기존 프로세스 환경 변수 → `.env.local` → `.env` �
 | `pnpm lint` | ESLint 검사 |
 | `pnpm test` | 외부 서비스가 필요 없는 테스트 |
 | `pnpm test:db` | 실제 PostgreSQL 연결·adapter·세션·권한·실패 경로 검증 |
+| `pnpm test:browser` | build 결과 + 실제 로컬 PostgreSQL + 테스트 캡처 메일로 인증 흐름 검증 |
 | `pnpm db:generate` | Drizzle 스키마에서 검토할 SQL migration 생성. DB 연결 불필요 |
 | `pnpm db:migrate` | migration 계정으로 저장소의 migration 적용 |
 | `pnpm db:check` | 런타임 계정으로 실제 `SELECT 1` 실행 |
-| `pnpm db:grant-auth` | 네 인증 테이블의 런타임 CRUD 권한 부여 |
+| `pnpm db:grant-auth` | 다섯 인증 기반 테이블의 런타임 CRUD 권한 부여 |
 
 일반 코드 검증과 production build는 별도의 게이트입니다.
 
@@ -135,6 +150,18 @@ pnpm build
 `test:db`도 `DATABASE_URL`이 없으면 테스트를 건너뛰지 않고 실패합니다.
 기본 build 명령은 `next build`를 유지합니다. `--webpack`은 진단용 fallback이며 기본 게이트를 대체하지 않습니다.
 환경별 검증 기록은 [Slice 1B-1 기록](docs/plans/active/0001-mvp-foundation.md#slice-1b-1--better-auth-persistence-foundation)에 있습니다.
+
+브라우저 검증은 로컬 HTTP `BETTER_AUTH_URL`과 migration/grant가 적용된 DB를 사용합니다.
+전용 테스트 서버를 시작하므로 같은 포트의 개발 서버는 먼저 종료하세요.
+Windows에서는 설치된 Edge, 다른 환경에서는 Playwright Chromium이 필요합니다.
+메일 발송 POST만 테스트 프로세스의 실제 Better Auth/DB와 캡처 수신기로 처리하고,
+검증·이름 변경·가드·로그아웃은 실행 중인 Next.js를 사용합니다. 실제 Resend E2E를 대체하지 않습니다.
+테스트는 합성 인증 비밀값을 사용하며 메일 API key 없이 실행됩니다.
+
+```powershell
+pnpm build
+pnpm test:browser
+```
 
 ## 문서
 

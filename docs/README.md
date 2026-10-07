@@ -30,6 +30,7 @@ The root `AGENTS.md` routes a task to only the documents it needs.
 ## Active plans
 
 - [MVP foundation](plans/active/0001-mvp-foundation.md)
+- [Slice 1B-2 implementation and validation](plans/active/0002-magic-link-sign-in.md)
 
 ## Architecture decisions
 

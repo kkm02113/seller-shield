@@ -11,9 +11,10 @@
   changing the architecture boundary.
 
 As of 2026-10-04 the Slice 0 shell, approved Slice 1A PostgreSQL/Drizzle
-foundation, and Slice 1B-1 Better Auth persistence are **IMPLEMENTED** within
-the local validation boundaries below. Four GLOBAL auth tables, database
-sessions, and non-owner runtime CRUD grants exist. Usable sign-in, product
+foundation, Slice 1B-1 Better Auth persistence, and Slice 1B-2 Magic Link flow
+are **IMPLEMENTED** within the local validation boundaries below. Four GLOBAL
+core auth tables plus official `rate_limits`, DB sessions, and non-owner runtime
+CRUD grants exist. Real Resend delivery remains unverified. Product
 tables, Tenant/Membership, RLS, storage, tenant authorization/isolation, AI,
 export, worker, and deployment remain **NOT IMPLEMENTED**. Local database setup
 is not production provisioning or proof of tenant isolation.
@@ -66,8 +67,8 @@ filesystem, so deployment must not assume static export semantics.
 
 ## Repository layout
 
-`src/app/`, `src/platform/db/`, `src/platform/auth/`, the single core-auth
-migration, and the corresponding unit/real-DB tests are implemented.
+`src/app/`, `src/platform/db/`, `src/platform/auth/`, `src/platform/email/`, two
+auth infrastructure migrations, and unit/real-DB/browser tests are implemented.
 `src/modules/`, other platform adapters, `src/worker/`, tenant/product migrations,
 and the larger test hierarchy remain planned.
 
@@ -85,6 +86,7 @@ seller-shield/
 │  │  └─ outcomes/              # seller-entered results and metrics events
 │  ├─ platform/
 │  │  ├─ auth/                  # Better Auth adapter and session translation
+│  │  ├─ email/                 # EmailSender and Resend adapter
 │  │  ├─ db/                    # Drizzle foundation; tenant boundary is planned
 │  │  ├─ storage/               # S3-compatible implementation
 │  │  ├─ ai/                    # one provider adapter implementation
@@ -121,10 +123,10 @@ team boundary requires it.
 - **Testing:** Vitest for pure logic, React Testing Library for focused
   interactive components, and Playwright for critical browser flows.
 
-The implemented Slice 0 UI is one semantic Server Component shell with no
-fictional business data. React Testing Library and Playwright are not installed
-because there is no interactive component or critical browser workflow yet; a
-server-rendered Vitest test covers the current shell.
+The Slice 0 shell contains no fictional business data. Slice 1B-2 adds semantic
+sign-in, confirmation, onboarding and account-only screens. Focused React
+Testing Library tests and Playwright flows are installed. Auth mutations use
+the official Better Auth HTTP client rather than ordinary Server Actions.
 
 ## Backend and API — DECIDED; health/auth persistence mounts IMPLEMENTED
 
@@ -132,7 +134,7 @@ Next.js runs on the Node.js runtime and hosts the application layer.
 
 Slice 0 implements only `GET /api/health`, returning process status with no
 database, storage, AI, authentication, or marketplace claim. Slice 1B-1 adds
-the official auth mount described below, without enabling sign-in. Product
+the official auth mount; Slice 1B-2 enables only Magic Link sign-in. Product
 application services and other adapters below remain **NOT IMPLEMENTED**.
 
 - Server Actions and Route Handlers are thin adapters. They authenticate,
@@ -198,15 +200,16 @@ existing process environment variables. `pnpm test` excludes external-service
 integration tests; `pnpm test:db` is the explicit real-DB gate and fails when
 `DATABASE_URL` is absent. At Slice 1A approval, `drizzle/` contained only an
 empty journal and migration application created only bookkeeping. Slice 1B-1
-now adds one reviewed auth migration. Local role privileges and the remaining
+adds the core-auth migration; Slice 1B-2 adds the official limiter migration.
+Local role privileges and the remaining
 schema boundary are recorded in
 [`docs/DATABASE.md`](DATABASE.md#slice-1a-foundation--implemented-local-validation).
 
 The conceptual model and future schema constraints are defined in
 [`docs/DATA_MODEL.md`](DATA_MODEL.md). The approved physical PostgreSQL table,
 constraint, index, and RLS policy design is in
-[`docs/DATABASE.md`](DATABASE.md). Only the four GLOBAL auth table definitions
-and their migration exist. Production role provisioning, automated test-database
+[`docs/DATABASE.md`](DATABASE.md). Only the four GLOBAL core auth tables plus
+official `rate_limits` and their migrations exist. Production role provisioning, automated test-database
 lifecycle, tenant/product tables, and RLS remain **NOT IMPLEMENTED**.
 
 ## Authentication and tenant model
@@ -239,7 +242,8 @@ PostgreSQL stores sessions; secondary storage, stateless/JWT sessions, and cooki
 are not selected. Cookie caching stays disabled so expiry/revocation checks use
 the database. The server boundary uses Better Auth's session API; any required
 Next.js mount uses the official `toNextJsHandler`, not a public debug endpoint.
-No sign-in method, fake provider, or signed-in product state is introduced.
+Slice 1B-1 introduced no sign-in method or signed-in product state; 1B-2 extends
+the same factory as described below, without introducing a product workspace.
 
 Authentication requests require server-only `BETTER_AUTH_SECRET` (high entropy,
 at least 32 characters) and an explicit `BETTER_AUTH_URL` to local/deployment
@@ -253,12 +257,12 @@ The official `toNextJsHandler` mounts GET/POST under `/api/auth/[...all]`.
 The pure factory accepts injected DB/config for official offline schema tooling
 and real adapter tests; application credential access is in the `server-only`
 entry point. Auth error logs preserve severity but discard SQL parameters and
-raw error data. No production sign-in or test fixture endpoint is exposed.
+raw error data. No production test fixture endpoint is exposed.
 
 Local validation proves adapter User/Account/Session/Verification persistence,
 DB session lookup/expiry/revocation, atomic core verification consumption,
 constraints, actual columns/indexes/ownership, and runtime DDL denial. This is
-not a verified Magic Link flow or tenant authorization. Default `pnpm build`
+not by itself a verified Magic Link flow or tenant authorization. Default `pnpm build`
 (Turbopack) passed in the working tree and a fresh Windows snapshot on
 2026-10-04, closing the local build gate without a webpack opt-out or repository
 configuration change. Linux/CI execution remains unverified; the historical
@@ -267,7 +271,52 @@ native-SWC policy block and audit evidence are recorded in the
 
 Slice 1B-2 adds the [Magic Link plugin](https://better-auth.com/docs/plugins/magic-link),
 transactional delivery through its `sendMagicLink` callback, and sign-in UI.
-The email vendor/region remain **OPEN** and do not block 1B-1.
+
+### Slice 1B-2 — IMPLEMENTED, local validation
+
+- Keep Better Auth 1.7.7, UUIDs, GLOBAL User identity, database sessions, and
+  cookie caching OFF. Enable Magic Link with `expiresIn: 300`,
+  `storeToken: "hashed"`, and signup enabled; no other sign-in provider.
+- Email points to Seller Shield `/auth/verify#token=...`, using the raw token
+  supplied to `sendMagicLink`, never the generated consuming URL. Its initial
+  GET renders confirmation only. An explicit user action navigates to the
+  official HTTP verification endpoint with fixed local callbacks. The fragment
+  keeps tokens out of the initial HTTP request, not the later verification GET;
+  deployment request logs must redact authentication query strings.
+- Both new and returning users pass through `/auth/callback`. Server-side entry
+  guards send `name.trim() === ""` to authenticated `/onboarding`; names are
+  trimmed and limited to 1..80 characters. Empty initial names mean incomplete
+  onboarding, not fabricated data or Tenant authorization; no onboarding table.
+- Auth mutations use Better Auth's HTTP endpoints (the deliberate exception to
+  ordinary Server Actions), preserving cookies, origin/CSRF checks, and its
+  built-in limiter. Use database-backed `rateLimit` storage, Magic Link 5/60s,
+  and a 60-second UI-only resend countdown. No custom/email-key limiter.
+- Resend is DECIDED for MVP implementation, behind one `EmailSender` port and
+  one adapter. Tests inject a capture sender, never a production debug endpoint.
+  Tokyo is the approved sending region; stored provider data remains in the US.
+  Tracking must be OFF in provider domain settings. Account/domain/DNS/API
+  key/region/tracking setup and real delivery are not yet verified.
+- Session IP/User-Agent handling and trusted proxy/IP configuration remain
+  OPEN. Do not remove/null core fields or disable IP tracking to claim privacy.
+  Real-customer production usage is BLOCKED until overseas processing/retention
+  policies are reviewed and accepted. No Tenant/Membership/RLS/Case work.
+
+Execution and validation are tracked in the
+[Slice 1B-2 plan](plans/active/0002-magic-link-sign-in.md).
+
+Local real PostgreSQL tests verify hashed storage, expiry/reuse, atomic consume,
+database sessions, name validation, fixed redirects and the shared 5/60s limit
+across independent auth instances. Installed Edge tests exercise confirmation,
+onboarding/entry guards, returning users and logout against running Next.js.
+The sign-in POST in browser tests uses the same real factory/DB with a test-only
+capture sender; subsequent HTTP requests use the unmodified application server.
+This does not prove real Resend inbox delivery or production operational controls.
+DB fixture files run serially because upstream verification lookup prunes expired
+rows globally; no production cleanup is disabled and only synthetic rows are deleted.
+The Resend adapter extends the SDK's public transport boundary to redact raw
+provider errors (the SDK otherwise logs them in development), retains its send
+payload/headers, validates response shape, and uses a 10-second timeout. Revalidate
+this small extension on SDK upgrades; no retries, queues or provider framework.
 
 Conceptual identity model:
 

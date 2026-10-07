@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Implementation:** Tenant/Membership/authorization/RLS NOT IMPLEMENTED;
-  Slice 1B-1 GLOBAL auth persistence is locally implemented, not usable sign-in.
+  Slice 1B-2 sign-in is locally validated with captured email, not tenant access.
 - **Revision:** 2026-10-01 — Better Auth replaces the original Auth.js choice
   before authentication implementation; tenant authorization is unchanged.
 
@@ -50,8 +50,8 @@ boundary.
 
 The initial sign-in method remains email magic link, implemented only in
 Slice 1B-2 through Better Auth's Magic Link plugin. The transactional email
-vendor and deployment region remain provider decisions before real sign-in;
-they do not block the persistence-only Slice 1B-1.
+decision and operational gates are recorded in Architecture/Security; real
+delivery and real-customer production approval remain separate from local validation.
 
 ## Consequences
 

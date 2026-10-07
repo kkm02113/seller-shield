@@ -10,7 +10,7 @@ indexes, deletion behavior, and Row-Level Security policy intent.
 - **DECIDED DESIGN / NOT IMPLEMENTED:** the product tables, columns,
   relationships, RLS policies, worker roles, and queue behavior below remain
   approved design, not an implemented business schema. The Slice 1A
-  infrastructure/local-role and four GLOBAL auth-table exceptions are recorded
+  infrastructure/local-role and five GLOBAL auth-infrastructure table exceptions are recorded
   separately below. No tenant/product-domain table has been implemented.
 - **OPEN:** the operational and provider choices listed at the end remain open.
 - **OUT OF SCOPE:** this document does not contain migration SQL, TypeScript
@@ -49,7 +49,7 @@ On 2026-10-02, `drizzle/0000_auth-foundation.sql` was reviewed before applicatio
 and applied to the existing local PostgreSQL 18.6 database using the migration
 owner. It creates exactly the four GLOBAL core tables below, with 34 columns,
 two cascading User FKs, unique email/session token, and the approved indexes.
-The migration journal has one applied row; repeated generation found no schema
+At Slice 1B-1 approval the migration journal had one applied row; repeated generation found no schema
 changes and repeated migration was a no-op. No domain/plugin table was added.
 
 `pnpm db:grant-auth` separately grants only SELECT/INSERT/UPDATE/DELETE on these
@@ -251,9 +251,10 @@ has `tenant_id`, tenant RLS, or Seller Shield authorization roles.
   `email_verified boolean NOT NULL DEFAULT false`, `image text NULL`,
   `created_at timestamptz NOT NULL`, `updated_at timestamptz NOT NULL`.
 - **Constraints:** `UNIQUE (email)` after application-side canonicalization.
-  Better Auth requires name and email. Slice 1B-2 must decide how real sign-in
-  supplies a name without fabricating user data; that UI/registration decision
-  does not add sign-in to the persistence foundation.
+  Better Auth 1.7.7 Magic Link accepts an omitted name and creates `name: ""`.
+  Slice 1B-2 treats a blank trimmed name as incomplete authenticated onboarding;
+  it never substitutes an email/fake name or adds an onboarding flag. The column
+  remains NOT NULL; name updates must trim and validate 1..80 characters.
 - **Delete:** physical deletion is not ordinary tenant deletion. Accounts and
   sessions may cascade; Membership RESTRICTs deletion until the identity is
   revoked/anonymized under an approved policy.
@@ -324,13 +325,36 @@ Before creating the Slice 1B-1 migration, compare the generated Better Auth
 schema against every field, nullability/default, UUID/FK type, timestamp,
 index, and mapping above. Review the final Drizzle schema and generated SQL;
 prove adapter CRUD and session expiry/revocation on real PostgreSQL using the
-non-owner runtime role. These checks passed for the current single migration;
+non-owner runtime role. These checks passed for the Slice 1B-1 migration;
 repeat the generation comparison before future auth-schema changes. The only
 auth migration target is these four GLOBAL tables plus
 their constraints/indexes and narrowly scoped runtime grants. No organization
 plugin, tenant tables, RLS, database rate-limit table, or other plugin schema
 belongs in this migration. The foundation must not enable secondary storage or
 session cookie caching; database sessions remain authoritative.
+
+## Slice 1B-2 GLOBAL authentication rate-limit infrastructure — IMPLEMENTED
+
+The official Better Auth database-backed `rateLimit` model is mapped to
+physical `rate_limits` and canonical plural Drizzle export `rateLimits`.
+The pinned core contract adds `id`, unique required `key`, required integer
+`count`, and required `lastRequest` bigint (epoch milliseconds). Keep native
+UUID IDs and snake-case SQL mapping; compare official generation before a new
+incremental migration. The four existing core tables/migration stay unchanged.
+Runtime CRUD grants must name this fifth table explicitly. No tenant ID, RLS,
+email/HMAC keys, custom storage, or business tables belong here. Keys contain
+IP/path data; proxy trust and operational retention remain OPEN, not a claim
+of anonymous or zero-retention storage.
+
+On 2026-10-04, official `getSchema`/core contract checks matched the canonical
+fields before generating/reviewing `drizzle/0001_auth-rate-limit.sql`. It adds
+only `rate_limits`; the first migration and four core tables are unchanged.
+Both migrations are applied locally. Current validation expects exactly five
+tables/38 columns and verifies explicit runtime CRUD with CREATE/ALTER denial.
+Real HTTP tests verify the official 1.7.7 atomic limiter across independent
+instances and parallel requests; no custom limiter or email-key rows exist.
+The separate `db:grant-auth` command now names all five infrastructure tables;
+its role/ownership checks remain unchanged.
 
 ## TENANT_ROOT tenancy table
 
@@ -1280,8 +1304,9 @@ The full model is designed now, but migrations remain slice-scoped:
   path; empty schema, no product SQL migrations.
 - **Slice 1B-1:** Better Auth persistence foundation; only the four GLOBAL core
   tables above, runtime grants, and real adapter integration tests are implemented.
-- **Slice 1B-2:** Magic Link, transactional email, and sign-in UI. Review any
-  plugin-specific schema needs explicitly; no tenant/domain tables.
+- **Slice 1B-2:** implemented Magic Link/capture-email sign-in flow plus the
+  official GLOBAL `rate_limits` migration. Real Resend delivery remains a gate;
+  no tenant/domain tables.
 - **Slice 1C:** `tenants`, `memberships`, and their RLS policies/tests. Seller
   Shield alone owns this authorization model; no auth organization plugin.
 - **Slice 1D:** `cases`, `claim_snapshots`, and `case_events`, with their tenant
@@ -1322,10 +1347,11 @@ prove:
 
 ## Remaining decisions before affected implementation
 
-- Better Auth and its Drizzle adapter are selected at stable 1.7.7, not yet
-  installed. Verify generated schema, plural resolution, UUID defaults, and real
-  adapter/session behavior during Slice 1B-1 before approval. Drizzle is pinned
-  in Slice 1A and PostgreSQL 18.6 is the selected operational baseline.
+- Better Auth and its Drizzle adapter are installed and pinned at stable 1.7.7.
+  Schema comparison, plural resolution, UUID defaults, and real adapter/session
+  behavior were validated for Slice 1B-1; repeat affected checks before future
+  auth-schema changes. Drizzle is pinned in Slice 1A and PostgreSQL 18.6 is the
+  selected operational baseline.
 - Choose provisional evidence/export retention periods, legal/product bases,
   backup expiry, and processor deletion before Slice 2 stores real data.
 - Select storage provider/region, upload limits, checksum behavior, quarantine,
@@ -1334,9 +1360,11 @@ prove:
   before Slice 5; earlier slices are not blocked.
 - Choose job lease duration, backoff, maximum attempts, and safe error-summary
   limits before the first async worker is enabled; table shape is not blocked.
-- Choose transactional email provider/region/data terms before Slice 1B-2
-  sends real email; this does not block Slice 1B-1. Choose AI provider/data terms
-  before any real data is sent to it.
+- Resend/Tokyo is selected; actual domain/region/tracking setup, inbox delivery
+  and overseas processing/retention acceptance remain separate gates (see
+  [Security](SECURITY.md#slice-1b-2-controls--implemented-local-validation)). They
+  block real-customer pilot/production approval, not local Slice 1C development.
+  Choose AI provider/data terms before any real data is sent to it.
 - Define database-level enforcement mechanism (trigger or restricted procedure)
   for active Artifact retention holds before physical byte deletion is enabled.
 

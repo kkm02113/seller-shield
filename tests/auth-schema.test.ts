@@ -1,6 +1,6 @@
 import { getSchema } from "better-auth/db";
 import { getTableColumns } from "drizzle-orm";
-import { getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, type PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
 import { createAuthentication } from "../src/platform/auth/factory";
@@ -8,8 +8,8 @@ import { createDatabaseConnection } from "../src/platform/db/connection";
 import * as schema from "../src/platform/db/schema/index";
 
 describe("Better Auth core physical schema", () => {
-  it("contains only the four plural GLOBAL tables", () => {
-    expect(Object.keys(schema).sort()).toEqual(["accounts", "sessions", "users", "verifications"]);
+  it("contains the four GLOBAL core tables and only the official rate-limit infrastructure", () => {
+    expect(Object.keys(schema).sort()).toEqual(["accounts", "rateLimits", "sessions", "users", "verifications"]);
   });
 
   it("matches upstream required fields while preserving UUIDs and timezone-aware timestamps", async () => {
@@ -35,7 +35,7 @@ describe("Better Auth core physical schema", () => {
           if (contract.references) expect(column.getSQLType()).toBe("uuid");
           if (contract.unique) expect(column.isUnique).toBe(true);
         }
-        expect(columns.updatedAt.onUpdateFn).toBeTypeOf("function");
+        if ("updatedAt" in columns) expect(columns.updatedAt.onUpdateFn).toBeTypeOf("function");
       }
       expect(getTableConfig(schema.accounts).foreignKeys[0].onDelete).toBe("cascade");
       expect(getTableConfig(schema.sessions).foreignKeys[0].onDelete).toBe("cascade");
@@ -47,5 +47,18 @@ describe("Better Auth core physical schema", () => {
     } finally {
       await connection.client.end({ timeout: 1 });
     }
+  });
+
+  it("stores the official rate-limit key uniquely and epoch milliseconds as a number-backed bigint", () => {
+    const table = (schema as Record<string, PgTable>).rateLimits;
+    expect(table, "official DB rate-limit table is required").toBeDefined();
+    const columns = getTableColumns(table);
+    expect(Object.keys(columns).sort()).toEqual(["count", "id", "key", "lastRequest"]);
+    expect(columns.id.getSQLType()).toBe("uuid");
+    expect(columns.id.hasDefault).toBe(true);
+    expect(columns.key.isUnique).toBe(true);
+    expect(columns.count.getSQLType()).toBe("integer");
+    expect(columns.lastRequest.getSQLType()).toBe("bigint");
+    expect(columns.lastRequest.mapFromDriverValue("1791050000123")).toBe(1791050000123);
   });
 });

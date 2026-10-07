@@ -3,8 +3,10 @@
 > **Status:** Active implementation plan. Slice 0 is IMPLEMENTED. Slice 1A
 > is IMPLEMENTED and APPROVED after real-PostgreSQL validation on 2026-10-01;
 > Slice 1B-1 persistence is IMPLEMENTED and APPROVED within the local validation
-> boundary below on 2026-10-04;
-> Slice 1B-2 onward remains PLANNED. Execution must follow the root `AGENTS.md`;
+> boundary below on 2026-10-04; Slice 1B-2 is COMPLETED and APPROVED — local/test
+> on 2026-10-06. Slice 1C onward remains PLANNED. This is the authoritative overall
+> execution plan; slice-specific plans are subordinate implementation records.
+> Execution must follow the root `AGENTS.md`;
 > do not commit or push unless a later task explicitly requests it.
 
 Slice 1B-1's design was revised on 2026-10-01 to Better Auth persistence;
@@ -36,8 +38,9 @@ The conceptual data model is decided in
 [`docs/DATA_MODEL.md`](../../DATA_MODEL.md), and the implementation-ready
 physical PostgreSQL design is decided in
 [`docs/DATABASE.md`](../../DATABASE.md). Application shell, database tooling,
-four core-auth tables, one migration, and Better Auth configuration now exist,
-with separate runtime/migration roles verified locally. Product-domain tables,
+four core-auth tables plus `rate_limits`, two migrations, and the Better Auth
+Magic Link/onboarding flow now exist, with separate runtime/migration roles
+verified locally. Product-domain tables,
 production role provisioning, RLS
 policies, and all later product code remain unimplemented until later slices.
 Provider selections explicitly left open below are not capabilities.
@@ -148,9 +151,9 @@ None beyond the product name and documentation routes.
 > and APPROVED on 2026-10-01 after local PostgreSQL 18.6 validation. It includes the
 > initially empty Drizzle schema, separate runtime/migration URL validation, migration
 > commands, a real `SELECT 1` smoke path, and an explicit `pnpm test:db` gate
-> that fails when no database is configured. Slice 1B-1 persistence now exists;
-> Slice 1B-2 (sign-in), 1C
-> (Tenant/Membership/RLS), 1D (Case/ClaimSnapshot/CaseEvent), and 1E (manual
+> that fails when no database is configured. Slice 1B-1 persistence and Slice
+> 1B-2 sign-in/onboarding are IMPLEMENTED and APPROVED within local/test limits.
+> Slice 1C (Tenant/Membership/RLS), 1D (Case/ClaimSnapshot/CaseEvent), and 1E (manual
 > Create → Inbox → Detail) remain PLANNED.
 
 Slice 1A validation record: `pnpm install --frozen-lockfile`, `pnpm check`
@@ -240,10 +243,16 @@ were not changed. Multi-process/repeated-identifier sign-in semantics remain
 
 Slice 1B-2 owns the official Better Auth Magic Link plugin, its `sendMagicLink`
 delivery callback, transactional email provider/region/data terms, and sign-in
-UI. Decide real-user name capture and sensitive auth-data handling before real
-sign-in; the provider is still open and does not block Slice 1B-1. Slice 1C owns
-Seller Shield Tenant/Membership/server authorization/RLS, with no parallel
-organization abstraction in the auth library.
+UI. This flow is locally implemented with captured email and verified against
+real PostgreSQL/Edge; blank initial names require authenticated onboarding.
+Resend is selected, while actual delivery and overseas processing/retention
+acceptance remain separate gates. Session IP/User-Agent and trusted proxy
+decisions remain OPEN. See the [implementation plan](0002-magic-link-sign-in.md).
+These operational gates block real-customer pilot/production approval, not local
+Slice 1C development. Slice 1C owns Seller Shield Tenant/Membership/server
+authorization/RLS, with no parallel organization abstraction in the auth library.
+Do not start Slice 1C implementation until Slice 1B-2 is manually committed and
+the working tree is clean.
 
 ### Whole Slice 1 goal
 
