@@ -9,8 +9,11 @@ not define database columns, SQL, migrations, or implemented behavior.
 - **DECIDED:** aggregate boundaries, ownership, relationships, lifecycle
   invariants, tenant/RLS strategy, package snapshot semantics, and minimum job
   semantics described here.
-- **PLANNED / NOT IMPLEMENTED:** every table, constraint, RLS policy, storage
-  record, job, and application behavior described here.
+- **IMPLEMENTED, LOCAL VALIDATION:** GLOBAL auth persistence/sign-in, and Slice
+  1C-1 Tenant/Membership physical constraints + ENABLE/FORCE default-deny RLS.
+  Exact physical status/validation is owned by [`DATABASE.md`](DATABASE.md).
+- **PLANNED / NOT IMPLEMENTED:** remaining product tables, actual tenant
+  authorization policies/context/bootstrap, workspace UI, storage, and jobs.
 - **OPEN:** provider choices, retention periods, physical deletion schedules,
   and the operational parameters listed at the end of this document.
 
@@ -83,10 +86,12 @@ that User within a Tenant.
 - **Responsibility:** seller workspace and primary data-ownership boundary.
 - **Owning tenant:** none; Tenant is the root of a tenant-owned aggregate, not a
   row owned by itself or another Tenant.
-- **Lifecycle and identity:** stable opaque identity; suspension or deletion is
-  distinct from deleting every child record.
+- **Lifecycle and identity:** stable opaque identity; no ordinary physical
+  deletion or cascade removal of child records. Suspension/status fields are
+  outside the approved minimal 1C-1 persistence contract.
 - **Invariants and relationships:** every tenant-owned aggregate points to one
-  Tenant; no domain relationship may cross tenant IDs.
+  Tenant; no domain relationship may cross tenant IDs. Creator attribution
+  references a GLOBAL User but never grants continuing workspace access.
 - **Does not contain:** user credentials, buyer reputation, or marketplace
   connector behavior.
 
@@ -627,6 +632,11 @@ foreign keys prevent a valid identifier in Tenant A from being attached to a
 parent in Tenant B.
 
 ## PostgreSQL RLS strategy
+
+**CURRENT 1C-1:** Tenant/Membership persistence exists with ENABLE/FORCE RLS and
+zero policies. No runtime tenancy privileges were added. The request context,
+allow policies and cross-tenant/pool workflow below remain **PLANNED 1C-2**;
+workspace UI remains **PLANNED 1C-3**. Authentication alone still grants no Tenant access.
 
 ### Request transaction boundary
 

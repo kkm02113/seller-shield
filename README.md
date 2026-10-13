@@ -18,8 +18,9 @@
 | Slice 1A | PostgreSQL 연결, Drizzle 설정, migration 기반 | 구현·로컬 검증 완료 |
 | Slice 1B-1 | Better Auth 핵심 테이블, DB 세션, 런타임 CRUD 권한 | 구현·로컬 검증 완료 |
 | Slice 1B-2 | Magic Link, 확인 화면, 이름 입력, 세션·로그아웃 | 구현·캡처 메일/실DB/Edge 검증; 실제 메일 발송 미검증 |
+| Slice 1C-1 | Tenant/Membership 스키마·제약조건·ENABLE/FORCE RLS | APPROVED — local/test; 실DB·기본 build 검증 완료 |
 
-**아직 구현하지 않은 것:** Tenant/Membership·RLS,
+**아직 구현하지 않은 것:** 테넌트 허용 정책·actor/tenant context·workspace bootstrap/UI,
 케이스·증거 관리, AI 지원, 마켓플레이스 연동, PDF 내보내기.
 현재 홈 화면에는 케이스나 마켓플레이스 데이터가 없습니다.
 인증은 사용자 식별만 제공합니다. 판매자 조직의 권한이나 테넌트 격리는 아직 없습니다.
@@ -101,11 +102,18 @@ pnpm db:grant-auth
 pnpm test:db
 ```
 
-현재 두 migration은 `users`, `accounts`, `sessions`, `verifications`와 공식 제한 저장용
-`rate_limits`만 생성합니다. 제품 도메인 테이블은 없습니다.
-`db:grant-auth`는 같은 DB의 별도 migration 계정으로 이 테이블들의 CRUD 권한만 부여하며,
+현재 세 migration은 인증 테이블 5개와 `tenants`, `memberships`만 생성합니다.
+새 테넌트 테이블은 ENABLE/FORCE RLS + 정책 없음으로 기본 거부 상태입니다.
+`db:grant-auth`는 같은 DB의 별도 migration 계정으로 인증 테이블 5개의 CRUD 권한만 부여하며,
 런타임 계정에 소유권·schema CREATE 권한을 주거나 계정을 생성하지 않습니다.
-자세한 범위는 [인증 DB 기반 문서](docs/DATABASE.md#slice-1b-1-foundation--implemented-local-validation)를 참고하세요.
+테넌트 권한은 부여하지 않으므로 앱에서 Tenant를 조회할 수 없는 것이 의도된 상태입니다.
+자세한 범위는 [테넌트 DB 기반 문서](docs/DATABASE.md#slice-1c-1-foundation--implemented-local-validation)를 참고하세요.
+
+테넌트 실DB 테스트에는 기존 런타임·migration URL 외에 `DATABASE_TEST_ADMIN_URL`을
+테스트 프로세스에 별도로 제공해야 합니다. 같은 전용 로컬/테스트 DB의 기존 setup 관리자
+계정을 사용하며, 새 역할을 만들거나 RLS를 끄지 않습니다. 이 값이 없으면 테스트가 실패합니다.
+관리자는 합성 fixture 준비·제약조건 검증·정리만 수행하며 런타임 접근 검증을 대신하지 않습니다.
+앱/배포 환경에는 관리자 자격 증명을 제공하지 마세요.
 
 인증 handler는 `/api/auth/[...all]`에 연결되어 있습니다. `/sign-in`에서 이메일을 입력하면
 메일의 `/auth/verify#token=...` 링크를 열고 **로그인 계속**을 눌러 인증합니다.
@@ -149,7 +157,10 @@ pnpm build
 `db:check`는 DB 연결 실패를 정상으로 처리하지 않습니다.
 `test:db`도 `DATABASE_URL`이 없으면 테스트를 건너뛰지 않고 실패합니다.
 기본 build 명령은 `next build`를 유지합니다. `--webpack`은 진단용 fallback이며 기본 게이트를 대체하지 않습니다.
-환경별 검증 기록은 [Slice 1B-1 기록](docs/plans/active/0001-mvp-foundation.md#slice-1b-1--better-auth-persistence-foundation)에 있습니다.
+2026-10-08에는 Windows Application Control이 native SWC를 차단하여 기본 build가 실패했습니다.
+2026-10-12에는 원본과 동일 파일 복사본에서 기본 Turbopack build가 모두 통과했습니다.
+OS 정책·코드·build 기본값은 변경하지 않았고, 과거 차단이 재현되지 않는 이유는 미확정입니다.
+환경별 검증 기록과 승인 범위는 [MVP 구현 계획](docs/plans/active/0001-mvp-foundation.md)에 있습니다.
 
 브라우저 검증은 로컬 HTTP `BETTER_AUTH_URL`과 migration/grant가 적용된 DB를 사용합니다.
 전용 테스트 서버를 시작하므로 같은 포트의 개발 서버는 먼저 종료하세요.

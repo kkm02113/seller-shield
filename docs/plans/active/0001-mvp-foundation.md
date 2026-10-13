@@ -4,7 +4,9 @@
 > is IMPLEMENTED and APPROVED after real-PostgreSQL validation on 2026-10-01;
 > Slice 1B-1 persistence is IMPLEMENTED and APPROVED within the local validation
 > boundary below on 2026-10-04; Slice 1B-2 is COMPLETED and APPROVED — local/test
-> on 2026-10-06. Slice 1C onward remains PLANNED. This is the authoritative overall
+> on 2026-10-06 and committed at `314b0bb`. Slice 1C-1 persistence/default-deny
+> is APPROVED — local/test after final default-build validation on 2026-10-12.
+> Slice 1C-2 onward remains PLANNED. This is the authoritative overall
 > execution plan; slice-specific plans are subordinate implementation records.
 > Execution must follow the root `AGENTS.md`;
 > do not commit or push unless a later task explicitly requests it.
@@ -38,11 +40,12 @@ The conceptual data model is decided in
 [`docs/DATA_MODEL.md`](../../DATA_MODEL.md), and the implementation-ready
 physical PostgreSQL design is decided in
 [`docs/DATABASE.md`](../../DATABASE.md). Application shell, database tooling,
-four core-auth tables plus `rate_limits`, two migrations, and the Better Auth
-Magic Link/onboarding flow now exist, with separate runtime/migration roles
-verified locally. Product-domain tables,
-production role provisioning, RLS
-policies, and all later product code remain unimplemented until later slices.
+four core-auth tables plus `rate_limits`, Tenant/Membership persistence, three
+migrations, and the Better Auth Magic Link/onboarding flow now exist, with
+separate runtime/migration roles verified locally. Tenant/Membership RLS is
+ENABLE/FORCE with zero policies; no runtime tenancy grant was added. Remaining
+product-domain tables, production role provisioning, authorization/context/
+bootstrap/UI, and all later product code remain unimplemented until later slices.
 Provider selections explicitly left open below are not capabilities.
 
 ## Global constraints
@@ -153,7 +156,8 @@ None beyond the product name and documentation routes.
 > commands, a real `SELECT 1` smoke path, and an explicit `pnpm test:db` gate
 > that fails when no database is configured. Slice 1B-1 persistence and Slice
 > 1B-2 sign-in/onboarding are IMPLEMENTED and APPROVED within local/test limits.
-> Slice 1C (Tenant/Membership/RLS), 1D (Case/ClaimSnapshot/CaseEvent), and 1E (manual
+> Slice 1C-1 persistence/default-deny is APPROVED — local/test on 2026-10-12.
+> Slice 1C-2/3 authorization/workspace UI, 1D (Case/ClaimSnapshot/CaseEvent), and 1E (manual
 > Create → Inbox → Detail) remain PLANNED.
 
 Slice 1A validation record: `pnpm install --frozen-lockfile`, `pnpm check`
@@ -253,6 +257,83 @@ Slice 1C development. Slice 1C owns Seller Shield Tenant/Membership/server
 authorization/RLS, with no parallel organization abstraction in the auth library.
 Do not start Slice 1C implementation until Slice 1B-2 is manually committed and
 the working tree is clean.
+
+### Slice 1C-1 — Tenant/Membership persistence foundation
+
+Started from clean `Test` at `314b0bb` after the user manually committed 1B-2.
+Existing PostgreSQL 18.6 was stopped and restarted without installation/config
+changes. Preflight `db:check` passed; only five approved auth tables and migration
+bookkeeping existed. Execution implements only the approved 1C-1 request.
+
+- [x] Add exact minimal Tenant/Membership schema, role enum, checked-text status,
+  RESTRICT FKs, unique/check constraints and approved indexes.
+- [x] Preserve the independent five-table/38-column Better Auth contract; scope
+  old whole-public-schema assertions to auth, add exact seven-table inventory.
+- [x] Generate/review/apply one `0002_tenancy-foundation.sql`; append explicit FORCE
+  RLS to the same migration because pinned Drizzle models ENABLE only. Earlier
+  SQL/snapshots remain unchanged; no role, grant, policy or function is created.
+- [x] Real PostgreSQL tests use existing setup admin solely for synthetic fixtures/
+  constraint work. Runtime assertions use the actual non-owner URL. Owner-role
+  FORCE-RLS probes separate default-deny RLS from ACL denial. No RLS weakening,
+  bypass role, broad grants or reset is used. Writes that could unexpectedly pass
+  are rolled back; fixture cleanup uses only run-specific IDs.
+- [x] Update affected architecture/database/domain/security/README/ADR status.
+- [x] Catalog/scope/whitespace/secret/path checks and one independent focused
+  review. Its fixture-rollback finding was reproduced by a real-PG RED test and
+  fixed; full DB suite passes 32/32. No deferred minor finding.
+- [x] Close default build gate on 2026-10-12: original and identical fresh Windows
+  snapshot both pass default Turbopack build, without webpack or policy changes.
+
+Validation on 2026-10-08: frozen install (no dependency changes), `pnpm check`
+(51 tests), `pnpm db:check`, reviewed migration/application, and `pnpm test:db`
+(32 tests: 18 existing auth/DB + 14 tenancy) passed. The tenancy tests require an
+explicit test-only `DATABASE_TEST_ADMIN_URL` for the existing dedicated DB admin;
+it is injected into the test process and never supplied to application/deployment.
+`pnpm build` failed because Windows Application Control blocks the native SWC
+file; direct native loading reproduces the OS rejection. Diagnostic
+`next build --webpack` passed but does not replace the default gate. No package,
+build command, OS policy, role or runtime grant was changed to make it pass.
+All 17 Git-visible changed/new files were scanned without printing actual
+secrets: no matches or new-file whitespace findings. 96 local documentation
+path references exist; ignored env/tool/browser artifacts remain excluded.
+
+#### Final build gate — 2026-10-12
+
+**APPROVED — local/test.** No schema, migration, RLS, test, application,
+dependency, build-command or architecture decision changed for this validation.
+Only implementation-status/validation records were refreshed. No broad review,
+commit, push, migration/grant application or Slice 1C-2 work was performed.
+
+Node 24.19.0 and pnpm 11.19.0 were selected explicitly through a temporary runner;
+the host's newer pnpm was not changed. The original default `pnpm build` passed
+with native SWC/Turbopack. A temporary copy outside the repository contained all
+99 current Git-visible files, including uncommitted Slice 1C-1 work, excluding
+dependencies, build output, local secrets and ignored scratch. All 99 SHA-256
+hashes and the lockfile matched before and after frozen install, `pnpm check`
+(51 tests) and default `pnpm build` in the copy. Native SWC binary hashes also
+matched. Status-only documentation updates were mirrored and revalidated.
+
+The earlier failure was Windows Application Control rejecting
+`@next/swc-win32-x64-msvc@16.3.7` / `next-swc.win32-x64-msvc.node`
+(`ERR_DLOPEN_FAILED`) before application compilation, not a demonstrated
+repository/configuration defect. It no longer reproduces; why it stopped is
+**UNKNOWN**. No Windows policy or binary attribute was changed. A read-only
+sample of the latest 250 Code Integrity 3033/3077 events had no matching SWC
+event; no current rejection status was observed. Historical 1B-1 evidence above
+must not be mistaken for a new 1C-1 event.
+
+After copy validation, final original-worktree `pnpm check` (51 tests),
+`pnpm test:db` (32 real-PostgreSQL tests) and `git diff --check` passed. The
+existing local PostgreSQL cluster was restarted, without installation/config
+changes; existing test-admin credentials were injected only into the DB-test
+process. Approval does not establish 1C-2 authorization, Linux/CI or production
+deployment. User-managed baseline commit must precede 1C-2.
+
+**NOT IMPLEMENTED:** 1C-2 allow policies, actor-first discovery, transaction-local
+actor/tenant context, restricted `create_first_workspace` bootstrap/grants and
+cross-tenant/pool-reuse tests; 1C-3 workspace creation/selection UI and `/app`
+integration. Case/Evidence/marketplace and auth organization plugins remain out
+of scope. This is default-deny infrastructure, not completed tenant authorization.
 
 ### Whole Slice 1 goal
 

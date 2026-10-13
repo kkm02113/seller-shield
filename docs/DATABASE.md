@@ -10,8 +10,9 @@ indexes, deletion behavior, and Row-Level Security policy intent.
 - **DECIDED DESIGN / NOT IMPLEMENTED:** the product tables, columns,
   relationships, RLS policies, worker roles, and queue behavior below remain
   approved design, not an implemented business schema. The Slice 1A
-  infrastructure/local-role and five GLOBAL auth-infrastructure table exceptions are recorded
-  separately below. No tenant/product-domain table has been implemented.
+  infrastructure/local-role, five GLOBAL auth-infrastructure tables, and Slice
+  1C-1's two tenancy-table/default-deny exceptions are recorded separately below.
+  No other product-domain table or tenant authorization policy is implemented.
 - **OPEN:** the operational and provider choices listed at the end remain open.
 - **OUT OF SCOPE:** this document does not contain migration SQL, TypeScript
   Drizzle definitions, or application code; the local validation record is not
@@ -39,8 +40,8 @@ Installation, cluster data, and admin credentials are local-only outside the
 repository; runtime/migration URLs are in ignored `.env.local`. There is no
 committed production role provisioner. At Slice 1A approval the schema/journal
 were empty, with only `drizzle.__drizzle_migrations` bookkeeping and zero applied
-rows. Slice 1B-1's current four-table exception follows. Tenant tables, RLS,
-worker roles, and the rest of the 39-table P0 design are not implemented.
+rows. Subsequent auth/tenancy exceptions follow; worker roles and the remaining
+P0 product design are not implemented.
 Role separation does not itself establish tenant isolation.
 
 ## Slice 1B-1 foundation — IMPLEMENTED, local validation
@@ -71,6 +72,45 @@ database reset/TRUNCATE, test provider, or real sign-in is introduced.
 Test read assertions deliberately use identifier-scoped adapter reads rather
 than the internal lookup's global expired-row cleanup. A real expired sentinel
 regression verifies isolation; production verification cleanup is unchanged.
+
+## Slice 1C-1 foundation — IMPLEMENTED, local validation
+
+On 2026-10-08, reviewed `0002_tenancy-foundation.sql` was applied to the existing
+local PostgreSQL 18.6 database by `seller_shield_migrator`. Public inventory is
+exactly seven tables (five auth + two tenancy), with three applied migration
+rows. Earlier migrations are unchanged. Regeneration/reapplication is a no-op.
+The exact tenancy contract is defined in the two table sections below.
+
+Both tenancy tables have ENABLE and FORCE RLS and **zero policies**. The runtime
+remains non-owner/NOSUPERUSER/NOBYPASSRLS, with no schema CREATE, owner-role
+membership, or tenancy-table privileges. No grant command was broadened.
+Actual runtime SELECT/INSERT/UPDATE/DELETE fail with `42501` (ACL denial).
+Separately, the non-superuser/non-BYPASSRLS table owner sees no committed fixture
+rows, cannot update/delete them, and has INSERT rejected: this isolates actual
+FORCE-RLS default denial from the runtime ACL. Neither proves a completed
+multi-tenant authorization workflow.
+
+The existing `postgres` setup administrator is used only in the dedicated
+local/test database for synthetic fixtures and schema-constraint probes.
+`DATABASE_TEST_ADMIN_URL` must be explicitly supplied to the test process,
+target the same database through a third role, and is never an application
+variable or runtime/migration fallback. No new bypass role or fixture grant,
+RLS disabling, TRUNCATE, or database reset is introduced. Successful temporary
+probes roll back; committed fixture cleanup is limited to this run's IDs.
+
+Real tests verify all 13 columns, enum/defaults, four RESTRICT FKs, pair
+uniqueness, name/status/revocation checks, five indexes (including PK/unique),
+RLS flags, policy/function absence, and actual role/access behavior. The auth
+contract remains independently checked at 38 columns and five explicit CRUD
+tables. The 2026-10-08 native SWC block no longer reproduces: default Turbopack
+build passed in the original and identical fresh Windows snapshot on 2026-10-12.
+Final `check` (51 tests), real `test:db` (32 tests), and diff checks passed without
+schema/role/policy changes. Slice 1C-1 is **APPROVED — local/test**; see the
+[build-gate record](plans/active/0001-mvp-foundation.md). Linux/production is not verified.
+
+**NOT IMPLEMENTED (1C-2/3):** allow policies, actor-first discovery, transaction-
+local context, `create_first_workspace`, SECURITY DEFINER/bootstrap role,
+workspace creation/selection UI, and Case authorization.
 
 ## Design choices considered
 
@@ -362,17 +402,20 @@ its role/ownership checks remain unchanged.
 
 - **Purpose:** seller workspace and ownership root.
 - **Key:** `id uuid PRIMARY KEY DEFAULT gen_random_uuid()`.
-- **Columns:** `name text NOT NULL`, `status text NOT NULL`,
-  `created_at`, `updated_at`, optional `suspended_at`.
-- **Checks:** status is `ACTIVE`, `SUSPENDED`, or `CLOSED`; timestamp/status
-  combinations must be consistent.
-- **Delete:** no ordinary physical delete. Closure starts a reviewed deletion
-  workflow; child FKs RESTRICT.
-- **Indexes:** `(status)` only if operations need it; tenant selection is driven
-  by Membership.
-- **RLS:** actor may SELECT tenants having an active Membership; OWNER may
-  update its own tenant; creation uses a controlled onboarding transaction;
-  no runtime DELETE.
+- **IMPLEMENTED in 1C-1:** exactly `id`, `name text NOT NULL`,
+  `created_by_user_id uuid NOT NULL`, `created_at timestamptz NOT NULL DEFAULT
+  now()`, `updated_at timestamptz NOT NULL DEFAULT now()`. Drizzle updates advance
+  `updated_at`; no trigger is implied.
+- **Checks:** `char_length(name)` is 1..80 and `name = btrim(name)`; no global
+  name uniqueness or additional name semantics. Application input handling is
+  not implemented yet.
+- **FK/delete:** creator references GLOBAL `users(id) ON DELETE RESTRICT`.
+  It is historical attribution, never permanent authorization. No ordinary
+  physical Tenant delete; Membership child FK RESTRICTs it.
+- **Indexes:** primary key only; no status/suspended_at or speculative fields.
+- **CURRENT RLS:** ENABLE + FORCE, no policies, no runtime privileges.
+- **PLANNED 1C-2:** active-Membership SELECT, OWNER update, controlled workspace
+  bootstrap; no runtime DELETE.
 
 ## TENANT membership table
 
@@ -383,16 +426,21 @@ its role/ownership checks remain unchanged.
 - **Columns:** `tenant_id uuid NOT NULL`, `user_id uuid NOT NULL`,
   `role membership_role NOT NULL`, `status text NOT NULL`, `joined_at`,
   `revoked_at NULL`, `created_by_user_id uuid NULL`.
+- **IMPLEMENTED in 1C-1:** exactly the eight columns above including `id`;
+  `joined_at timestamptz NOT NULL DEFAULT now()`, nullable `revoked_at timestamptz`.
 - **Constraints:** `UNIQUE (tenant_id, user_id)`; role is `OWNER`, `OPERATOR`,
   or `REVIEWER`; status is `ACTIVE` or `REVOKED`; active rows have no
-  `revoked_at`, revoked rows do. At least one active OWNER must remain, enforced
-  by the owner-management transaction rather than a row CHECK.
-- **FK/delete:** Tenant RESTRICT; User and creator User RESTRICT/SET NULL only
-  under the identity-deletion procedure.
+  `revoked_at`, revoked rows do. Role is a PostgreSQL enum; status/revocation
+  use named CHECKs with no implicit role/status default. The last-active-OWNER
+  guard belongs to future owner-management transactions, not a row CHECK or 1C-1.
+- **FK/delete:** Tenant, User and nullable creator User all use RESTRICT.
+  SET NULL is not implemented; it requires an approved identity-deletion and
+  attribution-preservation procedure.
 - **Indexes:** `(user_id, status, tenant_id)` for workspace discovery and
   `(tenant_id, status, role)` for member administration.
-- **RLS:** actor may SELECT its own memberships across tenants; active OWNER may
-  SELECT/INSERT/UPDATE memberships for its tenant; revocation replaces DELETE.
+- **CURRENT RLS:** ENABLE + FORCE, no policies, no runtime privileges.
+- **PLANNED 1C-2:** actor-only ACTIVE discovery and narrowly authorized workspace
+  operations; revocation replaces DELETE. No organization/invitation abstraction.
 
 ## TENANT Case tables
 
@@ -1078,6 +1126,9 @@ human-decision state.
 
 ## RLS and authorization model
 
+**CURRENT 1C-1:** only ENABLE/FORCE default denial is implemented on Tenant and
+Membership. The context/policy design below is **PLANNED 1C-2 and later**.
+
 ### Context establishment
 
 An ordinary request uses one database transaction:
@@ -1121,7 +1172,7 @@ checks.
 
 | Tenant boundary/domain table | SELECT | INSERT | UPDATE | DELETE |
 | --- | --- | --- | --- | --- |
-| `tenants` | Active member; actor-only discovery | Controlled onboarding | OWNER; status workflow | Deny |
+| `tenants` | Active member; actor-only discovery | Controlled onboarding | OWNER; workspace name | Deny |
 | `memberships` | Self discovery; tenant OWNER administration | OWNER | OWNER role/revoke, preserving last OWNER | Deny |
 | `cases` | Active member | OWNER/OPERATOR | Capability + state machine | Deny; logical only |
 | `claim_snapshots` | Active member | OWNER/OPERATOR | Deny | Deny |
@@ -1307,8 +1358,12 @@ The full model is designed now, but migrations remain slice-scoped:
 - **Slice 1B-2:** implemented Magic Link/capture-email sign-in flow plus the
   official GLOBAL `rate_limits` migration. Real Resend delivery remains a gate;
   no tenant/domain tables.
-- **Slice 1C:** `tenants`, `memberships`, and their RLS policies/tests. Seller
-  Shield alone owns this authorization model; no auth organization plugin.
+- **Slice 1C-1:** two tenancy tables, constraints/indexes and ENABLE/FORCE RLS
+  default denial are implemented and tested locally; no allow policy/grant.
+- **Slice 1C-2 — PLANNED:** actual policies, actor/tenant transaction context,
+  restricted workspace bootstrap, grants, cross-tenant and pool-reuse tests.
+- **Slice 1C-3 — PLANNED:** workspace creation/selection UI and `/app` integration.
+  Seller Shield alone owns authorization; no auth organization plugin.
 - **Slice 1D:** `cases`, `claim_snapshots`, and `case_events`, with their tenant
   constraints and RLS tests. Slice 1E adds manual Create → Inbox → Detail.
 - **Slice 2:** Evidence, upload, Artifact, provenance, and retention structures.

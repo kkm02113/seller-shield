@@ -1,7 +1,7 @@
 # Seller Shield security and privacy
 
 These are durable requirements and approved architecture controls. Only the
-Slice 1A/1B-1/1B-2 local database/auth controls identified below are
+Slice 1A/1B-1/1B-2/1C-1 local database/auth controls identified below are
 implemented; the public shell still contains no tenant/product workflow.
 
 ## Status
@@ -18,11 +18,15 @@ lookup/expiry/revocation with cookie caching disabled, validated server-only
 auth environment access, redacted auth errors, and non-owner runtime CRUD
 grants; Magic Link hashed single-use tokens, non-consuming confirmation, fixed
 redirects, server-side name onboarding, and official DB IP/path limiting.
+Slice 1C-1 adds Tenant/Membership constraints and ENABLE/FORCE RLS with zero
+policies. Runtime tenancy access is ACL-denied; non-bypass owner probes verify
+FORCE-RLS default denial independently. No runtime tenancy grant was added.
 Code lives in `src/platform/auth/`, `src/platform/email/`, `src/platform/db/schema/`
 and auth pages; real PostgreSQL and Edge checks use synthetic/captured email.
 This is not proof of real Resend delivery, tenant isolation or production deployment.
 
-`NOT IMPLEMENTED`: tenant authorization/RLS, object
+`NOT IMPLEMENTED`: tenant authorization/RLS allow policies, actor/tenant context,
+workspace bootstrap/UI, cross-tenant workflow proof, object
 access, evidence hashing, general structured logging/audit events, and provider
 data controls.
 
@@ -71,6 +75,15 @@ Tenant access. See the [implemented flow](ARCHITECTURE.md#slice-1b-2--implemente
   prompts unless it is strictly required and protected.
 
 ## Tenant isolation and authorization
+
+- Slice 1C-1 is persistence/default-deny infrastructure only, not completed
+  tenant authorization. Actor-first discovery, actual policies, restricted
+  SECURITY DEFINER bootstrap and connection-pool/cross-tenant tests belong to
+  1C-2; workspace UI belongs to 1C-3. `/app` remains auth-only.
+- Existing setup/admin credentials may prepare synthetic constraint fixtures
+  only in a dedicated local/test DB through `DATABASE_TEST_ADMIN_URL`. Never
+  configure that URL in the application/deployment or substitute it for runtime
+  assertions. Tests do not disable RLS, create bypass roles or broaden grants.
 
 - Better Auth authenticates a GLOBAL User only. A core Session does not prove
   Tenant membership or a Seller Shield role. Organization/multi-tenant and

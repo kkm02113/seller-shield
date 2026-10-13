@@ -15,6 +15,13 @@
       "when": 1791047289329,
       "tag": "0001_auth-rate-limit",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791393120604,
+      "tag": "0002_tenancy-foundation",
+      "breakpoints": true
     }
   ]
 }

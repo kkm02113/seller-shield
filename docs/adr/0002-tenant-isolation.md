@@ -1,8 +1,12 @@
 # ADR-002: Tenant isolation and authorization
 
 - **Status:** Accepted
-- **Implementation:** Tenant/Membership/authorization/RLS NOT IMPLEMENTED;
+- **Implementation:** 2026-10-08 — Tenant/Membership persistence and ENABLE/FORCE
+  default-deny RLS locally validated (1C-1); no allow policies, context, bootstrap
+  or workspace UI. Tenant authorization/isolation remains NOT IMPLEMENTED.
   Slice 1B-2 sign-in is locally validated with captured email, not tenant access.
+  1C-1 is APPROVED — local/test after original/identical-snapshot default build
+  validation on 2026-10-12; the authorization decision is unchanged.
 - **Revision:** 2026-10-01 — Better Auth replaces the original Auth.js choice
   before authentication implementation; tenant authorization is unchanged.
 

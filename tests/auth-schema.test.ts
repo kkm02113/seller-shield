@@ -5,11 +5,18 @@ import { describe, expect, it } from "vitest";
 
 import { createAuthentication } from "../src/platform/auth/factory";
 import { createDatabaseConnection } from "../src/platform/db/connection";
-import * as schema from "../src/platform/db/schema/index";
+import * as coreSchema from "../src/platform/db/schema/auth";
+import * as repositorySchema from "../src/platform/db/schema/index";
+import { rateLimits } from "../src/platform/db/schema/rate-limit";
+
+const schema = { ...coreSchema, rateLimits };
 
 describe("Better Auth core physical schema", () => {
   it("contains the four GLOBAL core tables and only the official rate-limit infrastructure", () => {
     expect(Object.keys(schema).sort()).toEqual(["accounts", "rateLimits", "sessions", "users", "verifications"]);
+    for (const [name, table] of Object.entries(schema)) {
+      expect(repositorySchema[name as keyof typeof schema]).toBe(table);
+    }
   });
 
   it("matches upstream required fields while preserving UUIDs and timezone-aware timestamps", async () => {

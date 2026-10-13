@@ -10,7 +10,10 @@ import { createAuthentication } from "../src/platform/auth/factory";
 import { createDatabaseConnection } from "../src/platform/db/connection";
 import { requireDatabaseUrl } from "../src/platform/db/env";
 import { loadDatabaseEnvironment } from "../src/platform/db/local-env";
-import * as schema from "../src/platform/db/schema/index";
+import * as coreSchema from "../src/platform/db/schema/auth";
+import { rateLimits } from "../src/platform/db/schema/rate-limit";
+
+const schema = { ...coreSchema, rateLimits };
 
 loadDatabaseEnvironment();
 const connection = createDatabaseConnection(requireDatabaseUrl(process.env), { maxConnections: 2 });
@@ -73,14 +76,18 @@ afterAll(() => connection.client.end({ timeout: 5 }));
 describe("Better Auth ↔ Drizzle ↔ real PostgreSQL", () => {
   it("has the reviewed columns, defaults, indexes, constraints, and migration ownership in PostgreSQL", async () => {
     const columns = await connection.client`select table_name, column_name, data_type, is_nullable, column_default
-      from information_schema.columns where table_schema = 'public' order by table_name, ordinal_position`;
-    const indexes = await connection.client`select tablename, indexname from pg_indexes where schemaname = 'public'`;
+      from information_schema.columns where table_schema = 'public'
+      and table_name in ('users','accounts','sessions','verifications','rate_limits') order by table_name, ordinal_position`;
+    const indexes = await connection.client`select tablename, indexname from pg_indexes where schemaname = 'public'
+      and tablename in ('users','accounts','sessions','verifications','rate_limits')`;
     const constraints = await connection.client`select c.relname, con.contype, pg_get_constraintdef(con.oid) as definition
       from pg_constraint con join pg_class c on c.oid = con.conrelid
-      join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public'`;
+      join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public'
+      and c.relname in ('users','accounts','sessions','verifications','rate_limits')`;
     const owners = await connection.client`select c.relname, r.rolname as owner from pg_class c
       join pg_roles r on r.oid = c.relowner join pg_namespace n on n.oid = c.relnamespace
-      where n.nspname = 'public' and c.relkind = 'r'`;
+      where n.nspname = 'public' and c.relkind = 'r'
+      and c.relname in ('users','accounts','sessions','verifications','rate_limits')`;
     const [databaseOwner] = await connection.client`select r.rolname as owner from pg_database d
       join pg_roles r on r.oid = d.datdba where d.datname = current_database()`;
     expect(columns).toHaveLength(38);
@@ -225,7 +232,8 @@ describe("Better Auth ↔ Drizzle ↔ real PostgreSQL", () => {
       has_table_privilege(current_user, c.oid, 'REFERENCES') as refs,
       has_table_privilege(current_user, c.oid, 'TRIGGER') as trigger
       from pg_class c join pg_namespace n on n.oid = c.relnamespace
-      where n.nspname = 'public' and c.relkind = 'r' order by c.relname`;
+      where n.nspname = 'public' and c.relkind = 'r'
+      and c.relname in ('users','accounts','sessions','verifications','rate_limits') order by c.relname`;
     expect(tables.map((table) => table.relname)).toEqual(["accounts", "rate_limits", "sessions", "users", "verifications"]);
     for (const table of tables) {
       expect([table.runtime_owner, table.relrowsecurity, table.relforcerowsecurity, table.truncate, table.refs, table.trigger])
