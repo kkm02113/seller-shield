@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import postgres from "postgres";
 
 import { expect, test, type Page } from "@playwright/test";
 
@@ -10,6 +11,9 @@ import { CaptureEmailSender } from "../helpers/capture-email-sender";
 import { assertDatabaseTestTarget } from "../helpers/database-test-target";
 
 assertDatabaseTestTarget(process.env);
+const adminUrl = process.env.DATABASE_TEST_ADMIN_URL;
+if (!adminUrl) throw new Error("Browser workspace cleanup requires an explicit test administrator.");
+const administrator = postgres(adminUrl, { max: 1 });
 const environment = requireAuthEnvironment(process.env);
 const connection = createDatabaseConnection(requireDatabaseUrl(process.env), { maxConnections: 2 });
 const sender = new CaptureEmailSender();
@@ -35,7 +39,19 @@ test.beforeEach(async ({ page }, testInfo) => {
 });
 
 test.afterEach(async () => {
-  for (const email of emails) await connection.client`delete from public.users where email = ${email}`;
+  for (const email of emails) {
+    // New workspace flow retains RESTRICT FKs. Delete only this synthetic
+    // browser user's created workspaces before the original auth cleanup.
+    const [user] = await connection.client`select id from public.users where email = ${email}`;
+    if (user) await administrator.begin(async (tx) => {
+      const tenants = await tx`select id from public.tenants where created_by_user_id=${user.id}`;
+      for (const tenant of tenants) {
+        await tx`delete from public.memberships where tenant_id=${tenant.id}`;
+        await tx`delete from public.tenants where id=${tenant.id}`;
+      }
+    });
+    await connection.client`delete from public.users where email = ${email}`;
+  }
   for (const token of tokens) {
     const key = `magic-link:${createHash("sha256").update(token).digest("base64url")}`;
     await connection.client`delete from public.verifications where identifier = ${key}`;
@@ -43,7 +59,7 @@ test.afterEach(async () => {
   for (const ip of ips) await connection.client`delete from public.rate_limits where key like ${`${ip}|/%`}`;
   emails.clear(); ips.clear(); tokens.clear(); sender.messages.length = 0;
 });
-test.afterAll(() => connection.client.end({ timeout: 5 }));
+test.afterAll(() => Promise.all([connection.client.end({ timeout: 5 }), administrator.end({ timeout: 5 })]));
 
 function fixtureEmail() {
   const email = `browser-1b2-${randomUUID()}@example.test`;
@@ -90,7 +106,12 @@ test("initial GET is non-consuming; explicit confirmation creates session, onboa
   await expect(page).toHaveURL(`${environment.baseURL}/onboarding`);
   await page.getByLabel("이름", { exact: true }).fill("  판매자 김  ");
   await page.getByRole("button", { name: "이름 저장하고 계속" }).click();
+  await expect(page).toHaveURL(`${environment.baseURL}/workspaces/new`);
+  await page.getByLabel("워크스페이스 이름").fill("판매자 김의 워크스페이스");
+  await page.getByRole("button", { name: "워크스페이스 만들기" }).click();
   await expect(page).toHaveURL(`${environment.baseURL}/app`);
+  await expect(page.getByRole("main")).toContainText("판매자 김의 워크스페이스");
+  await expect(page.getByRole("main")).toContainText("OWNER");
   const [user] = await connection.client`select id, name from public.users where email = ${email}`;
   expect(user.name).toBe("판매자 김");
   expect(await connection.client`select id from public.sessions where user_id = ${user.id}`).toHaveLength(1);

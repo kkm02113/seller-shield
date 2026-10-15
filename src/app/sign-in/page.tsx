@@ -13,7 +13,7 @@ export default async function SignInPage({ searchParams }: {
         : "로그인을 완료하지 못했습니다. 로그인 링크를 다시 요청해주세요."}
     </p>}
     <SignInForm />
-    <p className="auth-note">개발·검증용 인증 단계입니다. 판매자 조직과 사건 기능은 아직 제공하지 않습니다.</p>
+    <p className="auth-note">개발·검증용 로그인입니다. 로그인 후 워크스페이스로 진입하며 사건 기능은 아직 제공하지 않습니다.</p>
     <Link href="/">프로젝트 홈</Link>
   </section></main>;
 }

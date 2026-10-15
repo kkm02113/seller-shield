@@ -1,8 +1,8 @@
 # Seller Shield security and privacy
 
 These are durable requirements and approved architecture controls. Only the
-Slice 1A/1B-1/1B-2/1C-1/1C-2 local database/auth controls identified below are
-implemented; the public shell still contains no tenant/product workflow.
+Slice 1A/1B-1/1B-2/1C local database/auth/workspace controls identified below are
+implemented; Case/Evidence and real-customer production remain out of scope.
 
 ## Status
 
@@ -31,7 +31,12 @@ Code lives in `src/platform/auth/`, `src/platform/email/`, `src/platform/db/`,
 This is not proof of real Resend delivery, product-domain isolation for tables
 not yet built, or production deployment.
 
-`NOT IMPLEMENTED`: workspace UI, Case/Evidence workflow isolation, object
+Slice 1C-3 connects workspace creation/selection and `/app` to those boundaries;
+local application/DB/browser regression passes (2026-10-15). One independent
+focused review found no concrete Critical/Important/Minor issue. This is local
+integration evidence, not real-customer production approval.
+
+`NOT IMPLEMENTED`: Case/Evidence workflow isolation, object
 access, evidence hashing, general structured logging/audit events, and provider
 data controls.
 
@@ -82,8 +87,19 @@ Tenant access. See the [implemented flow](ARCHITECTURE.md#slice-1b-2--implemente
 ## Tenant isolation and authorization
 
 - Slice 1C-2 establishes server-side tenancy authorization for the existing
-  Tenant/Membership tables, not a finished product workflow. Workspace UI
-  belongs to 1C-3; `/app` remains auth-only.
+  Tenant/Membership tables, not a finished claim workflow. Slice 1C-3 adds
+  workspace UI through the same server-authorized services, not a new RLS model.
+- Every workspace page/action requires a verified session and completed name
+  onboarding. `/app` resolves the current Membership on each server request.
+  `current_workspace` is an untrusted identifier-only HttpOnly/SameSite=Lax
+  session cookie, Secure in production. A foreign/nonexistent/revoked hint is
+  ignored on reads; failed selection clears it. No role/capability is trusted
+  from cookies, forms, headers, JWT or localStorage. Keeping a hint after logout
+  does not authorize a later actor. User-facing failures omit tenant/access
+  details; UI errors must not attach raw SQL-bearing causes.
+- Create/selection Server Actions keep Next's normal same-origin checks and
+  obtain identity server-side; there is no client actor override or direct DB
+  insertion. The bootstrap and Membership lock remain the mutation boundary.
 - Existing setup/admin credentials may prepare synthetic constraint fixtures
   only in a dedicated local/test DB through `DATABASE_TEST_ADMIN_URL`. Never
   configure that URL in the application/deployment or substitute it for runtime

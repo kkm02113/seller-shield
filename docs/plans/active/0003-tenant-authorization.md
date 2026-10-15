@@ -299,7 +299,15 @@ Linux/CI and production deployment remain separate unverified environments.
 - No commit/push/staging; `CODEX_REVIEW_2026-10-14.md` preserved unchanged.
   F1 proxy trust/recipient limits precede public email; F3/timeout remain separate
   improvements. Deletion/retention policy precedes real customer data; existing
-  RESTRICT FKs remain unchanged. Workspace UI remains 1C-3, not implemented.
+  RESTRICT FKs remain unchanged. At this slice's completion workspace UI was
+  still assigned to 1C-3 and not implemented.
+
+### Successor boundary — 2026-10-15
+
+The user approved 1C-2 local/test and committed baseline `13262fc`. Slice 1C-3
+now connects workspace UI to these unchanged services/policies; implementation
+and current validation belong to the [overall active plan](0001-mvp-foundation.md#slice-1c-3--workspace-onboarding-and-selection).
+This does not reopen the completed 1C-2 scope or authorize a new schema/RLS model.
 
 PostgreSQL references for implementation checks:
 [row locking privileges](https://www.postgresql.org/docs/18/sql-select.html),

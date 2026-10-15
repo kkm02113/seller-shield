@@ -8,6 +8,17 @@ import { tenantBoundary } from "./context.ts";
 export type WorkspaceSummary = Readonly<{ id: string; name: string; role: MembershipRole }>;
 
 export function createWorkspaceService(boundary: TenantBoundary) {
+  async function getWorkspace(tenantId: string): Promise<WorkspaceSummary> {
+    return boundary.withTenantContext(tenantId, async ({ tenantId: canonicalTenant, role, tx }) => {
+      let workspace;
+      try {
+        [workspace] = await tx.select({ id: tenants.id, name: tenants.name }).from(tenants)
+          .where(eq(tenants.id, canonicalTenant));
+      } catch { throw new Error("Workspace unavailable."); }
+      if (!workspace) throw new TenantAuthorizationError();
+      return { ...workspace, role };
+    });
+  }
   async function listWorkspaces(): Promise<WorkspaceSummary[]> {
     return boundary.withAuthenticatedActor(async ({ actorId, tx }) => {
       try {
@@ -44,7 +55,7 @@ export function createWorkspaceService(boundary: TenantBoundary) {
       return { ...workspace, role };
     });
   }
-  return { listWorkspaces, createFirstWorkspace, renameWorkspace };
+  return { listWorkspaces, getWorkspace, createFirstWorkspace, renameWorkspace };
 }
 
-export const { listWorkspaces, createFirstWorkspace, renameWorkspace } = createWorkspaceService(tenantBoundary);
+export const { listWorkspaces, getWorkspace, createFirstWorkspace, renameWorkspace } = createWorkspaceService(tenantBoundary);

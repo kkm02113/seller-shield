@@ -10,7 +10,7 @@
 
 ## 현재 상태
 
-현재는 DB·이메일 인증 기반에 서버 측 workspace 권한 경계를 추가한 단계입니다.
+현재는 DB·이메일 인증과 테넌트 권한 기반을 workspace 생성·선택 화면에 연결한 단계입니다.
 
 | 단계 | 구현 범위 | 상태 |
 | --- | --- | --- |
@@ -19,13 +19,14 @@
 | Slice 1B-1 | Better Auth 핵심 테이블, DB 세션, 런타임 CRUD 권한 | 구현·로컬 검증 완료 |
 | Slice 1B-2 | Magic Link, 확인 화면, 이름 입력, 세션·로그아웃 | 구현·캡처 메일/실DB/Edge 검증; 실제 메일 발송 미검증 |
 | Slice 1C-1 | Tenant/Membership 스키마·제약조건·ENABLE/FORCE RLS | APPROVED — local/test; 실DB·기본 build 검증 완료 |
-| Slice 1C-2 | RLS 허용 정책, 세션 기반 transaction context, 제한된 workspace 서버 서비스 | 구현·로컬 회귀 검증 완료; 독립 리뷰 1회 후 F8 보완 |
+| Slice 1C-2 | RLS 허용 정책, 세션 기반 transaction context, 제한된 workspace 서버 서비스 | APPROVED — local/test; baseline `13262fc` |
+| Slice 1C-3 | workspace 생성·선택, 서버 재검증, workspace 기반 `/app` | 구현·로컬 회귀 검증 완료; 독립 리뷰 1회 차단 지적 없음 |
 
-**아직 구현하지 않은 것:** workspace 생성·선택 UI 및 `/app` 연결,
-케이스·증거 관리, AI 지원, 마켓플레이스 연동, PDF 내보내기.
+**아직 구현하지 않은 것:** 케이스·증거 관리, AI 지원, 마켓플레이스 연동,
+PDF 내보내기, 초대·멤버십 관리.
 현재 홈 화면에는 케이스나 마켓플레이스 데이터가 없습니다.
-인증 자체는 사용자 식별만 제공합니다. 서버 서비스는 ACTIVE Membership을 별도로 검증하지만,
-현재 `/app`은 여전히 인증 확인용 화면이며 조직 생성·선택 화면은 없습니다.
+인증 자체는 사용자 식별만 제공합니다. `/app`은 매 요청 ACTIVE Membership을 검증하고
+사용자 이름·이메일, workspace 이름·현재 role과 로그아웃만 표시합니다.
 실제 고객 운영은 [보안 문서의 미해결 승인 조건](docs/SECURITY.md#slice-1b-2-controls--implemented-local-validation)으로 차단되어 있습니다.
 
 다음 단계와 검증 범위는 [MVP 구현 계획](docs/plans/active/0001-mvp-foundation.md)에서 확인할 수 있습니다.
@@ -149,7 +150,12 @@ try { pnpm test:db } finally {
 
 인증 handler는 `/api/auth/[...all]`에 연결되어 있습니다. `/sign-in`에서 이메일을 입력하면
 메일의 `/auth/verify#token=...` 링크를 열고 **로그인 계속**을 눌러 인증합니다.
-처음에는 `/onboarding`에서 이름을 입력하고 `/app`에 진입합니다. `/app`은 인증 확인용 화면입니다.
+처음에는 `/onboarding`에서 이름을 입력합니다. 이후 ACTIVE Membership이 없으면
+`/workspaces/new`에서 최초 workspace를 만들고, 하나면 자동 진입하며, 여러 개면
+`/workspaces`에서 선택합니다. 유효한 선택 힌트가 있으면 다시 권한 확인 후 `/app`으로 진입합니다.
+`current_workspace`는 ID만 담는 HttpOnly/SameSite=Lax 쿠키이며 운영 환경에서는 Secure입니다.
+잘못되거나 철회된 힌트는 읽기 요청에서 무시하고, 잘못된 선택 제출은 쿠키를 지웁니다.
+쿠키 자체는 권한 증명이 아닙니다. 상세 경계는 [Architecture](docs/ARCHITECTURE.md#slice-1c-3--workspace-ui-implemented-local-validation)를 참고하세요.
 인증 설정이 없거나 잘못되면 일반적인 503 응답으로 실패하며 비밀값을 노출하지 않습니다.
 메일 설정이 없거나 발송이 실패하면 성공으로 처리하지 않습니다.
 

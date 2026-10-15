@@ -7,7 +7,9 @@
 > on 2026-10-06 and committed at `314b0bb`. Slice 1C-1 persistence/default-deny
 > is APPROVED — local/test after final default-build validation on 2026-10-12.
 > Slice 1C-2 is IMPLEMENTED and locally validated on 2026-10-14, after one focused
-> independent review and a final F8 correction pass. Slice 1C-3 onward remains
+> independent review and a final F8 correction pass, then approved and committed
+> at `13262fc`. Slice 1C-3 UI is IMPLEMENTED and locally validated on 2026-10-15;
+> one focused independent review found no blocking issue. Slice 1D onward remains
 > PLANNED. This is the authoritative overall
 > execution plan; slice-specific plans are subordinate implementation records.
 > Execution must follow the root `AGENTS.md`;
@@ -46,8 +48,8 @@ four core-auth tables plus `rate_limits`, Tenant/Membership persistence, four
 migrations, and the Better Auth Magic Link/onboarding flow now exist, with
 separate runtime/migration roles verified locally. Tenant/Membership keeps
 ENABLE/FORCE RLS with six 1C-2 policies, session-bound context, restricted
-bootstrap and minimal runtime grants. Remaining product-domain tables,
-production role provisioning, workspace UI and later product code remain
+bootstrap and minimal runtime grants. Workspace UI uses that boundary in 1C-3.
+Remaining product-domain tables, production role provisioning and later product code remain
 unimplemented until later slices.
 Provider selections explicitly left open below are not capabilities.
 
@@ -161,7 +163,8 @@ None beyond the product name and documentation routes.
 > 1B-2 sign-in/onboarding are IMPLEMENTED and APPROVED within local/test limits.
 > Slice 1C-1 persistence/default-deny is APPROVED — local/test on 2026-10-12.
 > Slice 1C-2 server authorization/bootstrap is IMPLEMENTED with local validation.
-> Slice 1C-3 workspace UI, 1D (Case/ClaimSnapshot/CaseEvent), and 1E (manual
+> Slice 1C-3 workspace UI is implemented and locally validated with one focused review.
+> Slice 1D (Case/ClaimSnapshot/CaseEvent), and 1E (manual
 > Create → Inbox → Detail) remain PLANNED.
 
 Slice 1A validation record: `pnpm install --frozen-lockfile`, `pnpm check`
@@ -363,6 +366,56 @@ wait, both revocation race directions, physical-connection reuse and actual
 production `requireUser()` session binding are covered. Applied older migrations,
 dependencies/lockfile and the user's external review report are unchanged.
 This does not validate Linux/CI, managed production provisioning or real mail delivery.
+
+### Slice 1C-3 — Workspace onboarding and selection
+
+IMPLEMENTED, locally validated on 2026-10-15. The supplied user
+implementation specification is authoritative for this bounded UI integration.
+Started from clean `Test` at approved 1C-2 baseline `13262fc`; `pnpm check`
+(18 files/65 tests) passed. Existing PostgreSQL was stopped; it was started on
+127.0.0.1:5432 without initialization/config changes, then `pnpm db:check` passed.
+One primary implementer; one final focused independent review, no commits/pushes.
+
+- Session and name onboarding precede every workspace page/action. Zero ACTIVE
+  memberships -> `/workspaces/new`; one -> scoped `/app`; multiple -> selector.
+- Discovery lists only current actor memberships. Selection remains untrusted
+  until `getWorkspace()` uses the existing locked tenant transaction. The role
+  rendered on `/app` is the current DB role. Reads never use global DB queries.
+- First creation accepts only the approved name and calls the existing bootstrap;
+  double/concurrent submits recover through fresh server discovery. No actor,
+  role, tenant or creator form field can control attribution.
+- Current workspace uses an identifier-only HttpOnly, SameSite=Lax session
+  cookie, Secure in production. Invalid hints are ignored on GET; failed
+  selection clears the cookie. No tenant token/JWT/localStorage authorization.
+- `/app` shows only user name/email, workspace name/current role and logout.
+  No Case, Evidence, marketplace, billing, invitation or management features.
+- No dependency/schema/migration/RLS/grant changes; existing 1C-2 attacks retained.
+  Existing Magic Link E2E is extended through workspace creation, not weakened;
+  synthetic FK cleanup uses the explicitly provided test administrator.
+- TDD: entry behavior 6 failures -> 7 unit passes; scoped real-PG reads 3 failures
+  -> passes; UI action failures -> 7 real-PG passes; forms 3 failures -> passes;
+  browser initially stayed at the old `/app`, then the new workspace flows passed.
+- Final checks: `pnpm check` 20 files/75 tests, real DB 11 files/65 tests,
+  Edge/capture E2E 6 tests and default build passed. Final sequential regression
+  passed; frozen install unchanged, `db:check`, no schema drift and diff check
+  passed. One focused independent review found no Critical/Important/Minor
+  finding; no second review or corrective code pass was needed. Real mail,
+  F1/F3/timeout, deletion/retention,
+  managed production setup and Linux/CI remain separate unverified gates.
+- Local/test Slice 1C completion gates are met: UI flow, real DB authorization
+  regression and browser flows are green. User-managed commit/clean baseline
+  must precede Slice 1D; no Case implementation was started here.
+- Coverage limits: actual DB outage injection through Server Actions, every
+  unauthenticated-action permutation and simultaneous real HTTP submissions
+  are not exhaustively exercised. Common guards/error handling are inspected;
+  actual session/DB action concurrency is tested, and existing DB lock/race
+  attacks remain green. These are additional coverage opportunities, not
+  evidence of a known bypass or a claim of exhaustive security verification.
+- Deployment automation must eventually wrap preflight -> prepare -> migrate
+  -> grant -> finalize -> postflight, with failure/retry validation. Postflight
+  must check zero temporary helper members, runtime no BYPASSRLS/SET ROLE helper,
+  FORCE RLS and only expected policies. This is operational debt, not implemented
+  automation or a 1C-3 blocker.
 
 ### Whole Slice 1 goal
 

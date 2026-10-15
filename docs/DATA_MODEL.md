@@ -12,9 +12,11 @@ not define database columns, SQL, migrations, or implemented behavior.
 - **IMPLEMENTED, LOCAL VALIDATION:** GLOBAL auth persistence/sign-in, and Slice
   1C-1 Tenant/Membership physical constraints + ENABLE/FORCE default-deny RLS.
   Slice 1C-2 adds actor-first authorization/context and restricted workspace
-  application services; final regression/review is in progress.
+  application services, approved local/test at baseline `13262fc`. Slice 1C-3
+  adds locally validated workspace UI using the same authorization model; one
+  focused review found no blocking issue.
   Exact physical status/validation is owned by [`DATABASE.md`](DATABASE.md).
-- **PLANNED / NOT IMPLEMENTED:** remaining product tables, workspace UI,
+- **PLANNED / NOT IMPLEMENTED:** remaining product tables,
   membership administration, storage, and jobs.
 - **OPEN:** provider choices, retention periods, physical deletion schedules,
   and the operational parameters listed at the end of this document.
@@ -638,7 +640,8 @@ parent in Tenant B.
 **CURRENT 1C-2:** Tenant/Membership retain ENABLE/FORCE RLS with narrow policies
 and grants. The actor-first context, workspace server operations and real
 cross-tenant/pool/race tests are implemented within the local validation boundary;
-workspace UI remains **PLANNED 1C-3**. Authentication alone still grants no Tenant access.
+workspace UI is implemented in 1C-3 through those same services, not a schema
+change. Authentication alone still grants no Tenant access.
 
 ### Request transaction boundary
 

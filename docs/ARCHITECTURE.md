@@ -25,8 +25,11 @@ F8 test-safety issues; these were reproduced, corrected and regression-tested.
 This is local implementation evidence, not production deployment approval.
 The validation record is in the
 [active plan](plans/active/0001-mvp-foundation.md).
+Slice 1C-3 workspace creation/selection UI and authorized `/app` are implemented
+and locally validated on 2026-10-15; one focused independent review found no
+blocking issue. This completes the local/test Slice 1C foundation, not production approval.
 Real Resend delivery remains unverified. Case/Evidence and other product
-tables, storage, workspace UI, AI,
+tables, storage, AI,
 export, worker, and deployment remain **NOT IMPLEMENTED**. Local database setup
 is not production provisioning or proof of tenant isolation.
 
@@ -78,10 +81,10 @@ filesystem, so deployment must not assume static export semantics.
 
 ## Repository layout
 
-`src/app/`, `src/platform/db/`, `src/platform/auth/`, `src/platform/email/`, two
-auth infrastructure migrations, and unit/real-DB/browser tests are implemented.
-`src/modules/`, other platform adapters, `src/worker/`, tenant/product migrations,
-and the larger test hierarchy remain planned.
+`src/app/`, `src/modules/identity/`, `src/platform/db/`, `src/platform/auth/`,
+`src/platform/email/`, four auth/tenancy migrations and unit/real-DB/browser
+tests are implemented. Other product modules/platform adapters, `src/worker/`,
+product-domain migrations and the larger test hierarchy remain planned.
 
 ```text
 seller-shield/
@@ -98,7 +101,7 @@ seller-shield/
 │  ├─ platform/
 │  │  ├─ auth/                  # Better Auth adapter and session translation
 │  │  ├─ email/                 # EmailSender and Resend adapter
-│  │  ├─ db/                    # Drizzle foundation; tenant boundary is planned
+│  │  ├─ db/                    # Drizzle foundation and tenant transaction boundary
 │  │  ├─ storage/               # S3-compatible implementation
 │  │  ├─ ai/                    # one provider adapter implementation
 │  │  ├─ pdf/                   # Playwright renderer
@@ -253,11 +256,39 @@ SECURITY DEFINER function. Provisioning grants a migrator-only temporary helper
 role for ownership/EXECUTE setup, then revokes it; runtime cannot SET ROLE helper.
 See [exact role/policy scope](DATABASE.md#slice-1c-2-authorization--implemented-local-validation).
 
-`/app` remains auth-only. Workspace creation/selection UI is 1C-3; Case/Evidence,
-membership administration, invitations and production provisioning are absent.
+At the 1C-2 baseline `/app` was auth-only; 1C-3 adds the UI described below.
+Case/Evidence, membership administration, invitations and production provisioning are absent.
 Shared DB-role GUCs trust server-side session binding, not arbitrary SQL clients.
 Real email, proxy/recipient controls, deletion policy and deployment gates remain
 separate from local tenant authorization validation.
+
+### Slice 1C-3 — Workspace UI IMPLEMENTED, local validation
+
+After verified session/name onboarding, ACTIVE Membership discovery routes zero
+memberships to `/workspaces/new`, one to a freshly authorized `/app`, and multiple
+to `/workspaces`. A valid current-workspace hint can skip repeat selection, but
+`getWorkspace()` always uses `withTenantContext()` and its locked Membership.
+The rendered name comes from that transaction; role comes from its current
+AccessContext, not discovery results or the browser. Discovery/authorization
+races render a safe retry instead of stale workspace details.
+
+Server Actions in `src/app/workspaces/actions.ts` authenticate/onboard first.
+Creation accepts only the existing 1..80 ASCII-space-trimmed name contract and
+calls the approved bootstrap service; it never inserts Tenant/Membership itself.
+Duplicate requests recover through fresh server discovery. Selection accepts
+only an untrusted tenant ID, validates it through the same scoped service, then
+writes a session-lifetime `current_workspace` cookie containing only that ID.
+The cookie is HttpOnly, SameSite=Lax, path=/, Secure in production; no role/JWT
+or localStorage authorization is introduced. Server Components only read it;
+invalid/stale/foreign hints are ignored, while rejected selection actions clear
+it. Hint persistence across logout grants no access to the next authenticated
+actor. Cookie mutation follows the [Next.js Server Action boundary](https://nextjs.org/docs/app/api-reference/functions/cookies).
+
+`/app` displays user name/email, validated workspace name/current role and
+logout only. New workspace routes share no-store/no-referrer/noindex headers;
+route error boundaries show generic retry messages, not SQL/access details.
+No schema/migration/RLS/grant change, organization plugin, invitation, Case,
+Evidence, billing or advanced workspace management is part of this slice.
 
 ## Authentication and tenant model
 

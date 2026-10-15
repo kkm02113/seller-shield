@@ -3,8 +3,10 @@
 - **Status:** Accepted
 - **Implementation:** 2026-10-14 — Tenant/Membership authorization policies,
   session-bound transaction context, Membership locks and restricted bootstrap
-  locally milestone-tested (1C-2); final regression/independent review in progress.
-  Workspace UI and Case/Evidence isolation remain NOT IMPLEMENTED.
+  locally tested and approved (1C-2 baseline `13262fc`). 2026-10-15: workspace UI
+  (1C-3) reuses this same model, locally validated with one focused review and
+  no blocking finding.
+  Case/Evidence isolation remains NOT IMPLEMENTED.
   Slice 1B-2 sign-in is locally validated with captured email, not tenant access.
   1C-1 is APPROVED — local/test after original/identical-snapshot default build
   validation on 2026-10-12; the authorization decision is unchanged.

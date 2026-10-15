@@ -10,8 +10,8 @@ export default function HomePage() {
         </h1>
         <p className="status">No cases or marketplace data are available yet.</p>
         <p>
-          Email sign-in is available for development verification. Integrations
-          and seller product workflows are not implemented yet.
+          Email sign-in and workspaces are available for development verification.
+          Case workflows and marketplace integrations are not implemented yet.
         </p>
         <a href="/api/health">View process health</a>
         <p><Link href="/sign-in">이메일 로그인 검증</Link></p>

@@ -108,7 +108,8 @@ Final `check` (51 tests), real `test:db` (32 tests), and diff checks passed with
 schema/role/policy changes. Slice 1C-1 is **APPROVED — local/test**; see the
 [build-gate record](plans/active/0001-mvp-foundation.md). Linux/production is not verified.
 
-**NOT IMPLEMENTED:** 1C-3 workspace creation/selection UI and Case authorization.
+**CURRENT:** 1C-3 connects workspace UI to the authorization services without
+schema/RLS/grant changes. Case authorization remains NOT IMPLEMENTED.
 
 ## Slice 1C-2 authorization — IMPLEMENTED, local validation
 
@@ -1421,7 +1422,8 @@ The full model is designed now, but migrations remain slice-scoped:
 - **Slice 1C-2 — IMPLEMENTED, local validation:** six policies, actor/tenant
   transaction context, restricted workspace bootstrap, minimal grants and real
   cross-tenant/concurrency/pool-reuse tests. No workspace UI or Case tables.
-- **Slice 1C-3 — PLANNED:** workspace creation/selection UI and `/app` integration.
+- **Slice 1C-3 — IMPLEMENTED, local validation:** workspace creation/selection UI
+  and `/app` integration. No new migration, table, column, policy or grant.
   Seller Shield alone owns authorization; no auth organization plugin.
 - **Slice 1D:** `cases`, `claim_snapshots`, and `case_events`, with their tenant
   constraints and RLS tests. Slice 1E adds manual Create → Inbox → Detail.
