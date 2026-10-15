@@ -9,13 +9,13 @@ import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { createAuthentication } from "../src/platform/auth/factory";
 import { createDatabaseConnection } from "../src/platform/db/connection";
 import { requireDatabaseUrl } from "../src/platform/db/env";
-import { loadDatabaseEnvironment } from "../src/platform/db/local-env";
+import { loadDatabaseTestEnvironment } from "./helpers/database-test-environment";
 import * as coreSchema from "../src/platform/db/schema/auth";
 import { rateLimits } from "../src/platform/db/schema/rate-limit";
 
 const schema = { ...coreSchema, rateLimits };
 
-loadDatabaseEnvironment();
+loadDatabaseTestEnvironment();
 const connection = createDatabaseConnection(requireDatabaseUrl(process.env), { maxConnections: 2 });
 const secret = "Synthetic-DB-integration-secret.0123456789!";
 const auth = createAuthentication(connection.db, { secret, baseURL: "http://localhost:3000" });

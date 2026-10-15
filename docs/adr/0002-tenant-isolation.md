@@ -1,9 +1,10 @@
 # ADR-002: Tenant isolation and authorization
 
 - **Status:** Accepted
-- **Implementation:** 2026-10-08 — Tenant/Membership persistence and ENABLE/FORCE
-  default-deny RLS locally validated (1C-1); no allow policies, context, bootstrap
-  or workspace UI. Tenant authorization/isolation remains NOT IMPLEMENTED.
+- **Implementation:** 2026-10-14 — Tenant/Membership authorization policies,
+  session-bound transaction context, Membership locks and restricted bootstrap
+  locally milestone-tested (1C-2); final regression/independent review in progress.
+  Workspace UI and Case/Evidence isolation remain NOT IMPLEMENTED.
   Slice 1B-2 sign-in is locally validated with captured email, not tenant access.
   1C-1 is APPROVED — local/test after original/identical-snapshot default build
   validation on 2026-10-12; the authorization decision is unchanged.

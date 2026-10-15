@@ -21,7 +21,9 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate --config=drizzle.migrate.config.ts",
     "db:check": "node scripts/db-check.ts",
-    "db:grant-auth": "node scripts/db-grant-auth.ts"
+    "db:grant-auth": "node scripts/db-grant-auth.ts",
+    "db:provision-tenancy": "node scripts/db-provision-tenancy.ts",
+    "db:grant-tenancy": "node scripts/db-grant-tenancy.ts"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "1.7.7",

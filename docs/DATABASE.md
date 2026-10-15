@@ -11,8 +11,8 @@ indexes, deletion behavior, and Row-Level Security policy intent.
   relationships, RLS policies, worker roles, and queue behavior below remain
   approved design, not an implemented business schema. The Slice 1A
   infrastructure/local-role, five GLOBAL auth-infrastructure tables, and Slice
-  1C-1's two tenancy-table/default-deny exceptions are recorded separately below.
-  No other product-domain table or tenant authorization policy is implemented.
+  1C-1's two tenancy tables and 1C-2's authorization policies/function are
+  recorded separately below. No other product-domain table is implemented.
 - **OPEN:** the operational and provider choices listed at the end remain open.
 - **OUT OF SCOPE:** this document does not contain migration SQL, TypeScript
   Drizzle definitions, or application code; the local validation record is not
@@ -81,7 +81,7 @@ exactly seven tables (five auth + two tenancy), with three applied migration
 rows. Earlier migrations are unchanged. Regeneration/reapplication is a no-op.
 The exact tenancy contract is defined in the two table sections below.
 
-Both tenancy tables have ENABLE and FORCE RLS and **zero policies**. The runtime
+At 1C-1 approval both tables had ENABLE and FORCE RLS and **zero policies**. The runtime
 remains non-owner/NOSUPERUSER/NOBYPASSRLS, with no schema CREATE, owner-role
 membership, or tenancy-table privileges. No grant command was broadened.
 Actual runtime SELECT/INSERT/UPDATE/DELETE fail with `42501` (ACL denial).
@@ -108,9 +108,68 @@ Final `check` (51 tests), real `test:db` (32 tests), and diff checks passed with
 schema/role/policy changes. Slice 1C-1 is **APPROVED — local/test**; see the
 [build-gate record](plans/active/0001-mvp-foundation.md). Linux/production is not verified.
 
-**NOT IMPLEMENTED (1C-2/3):** allow policies, actor-first discovery, transaction-
-local context, `create_first_workspace`, SECURITY DEFINER/bootstrap role,
-workspace creation/selection UI, and Case authorization.
+**NOT IMPLEMENTED:** 1C-3 workspace creation/selection UI and Case authorization.
+
+## Slice 1C-2 authorization — IMPLEMENTED, local validation
+
+On 2026-10-14 reviewed `0003_tenant-authorization.sql` adds six policies and
+`public.create_first_workspace(text) RETURNS uuid`; no table/column/FK changed.
+Both tenancy tables retain ENABLE/FORCE RLS. Final real-DB regression passes
+(58 tests), including distinct-backend bootstrap lock contention and
+revocation races. One independent review's three F8 findings were corrected;
+this is local validation, not production approval.
+
+Membership SELECT permits only actor-self ACTIVE rows without querying itself
+or Tenant. Tenant SELECT uses that Membership to permit workspace discovery.
+Tenant UPDATE requires the selected tenant plus ACTIVE OWNER Membership.
+Membership UPDATE USING actor-self ACTIVE with WITH CHECK false exists solely
+to support FOR SHARE; actual Membership mutation remains denied. Actor-only
+discovery intentionally needs no tenant GUC; selected-tenant writes do.
+
+`db:grant-tenancy` gives runtime SELECT on the two tables, UPDATE(name,
+updated_at) on Tenant, UPDATE(id) on Membership for locking, and EXECUTE on
+the bootstrap function. No INSERT/DELETE, ownership, schema CREATE, BYPASSRLS
+or helper membership is granted. Existing auth CRUD grants stay unchanged.
+
+The function owner `seller_shield_bootstrap` is NOLOGIN/NOSUPERUSER/NOBYPASSRLS,
+NOCREATEDB/NOCREATEROLE/NOREPLICATION/NOINHERIT, owns no table/schema/database,
+and inherits no roles. Its only special policies are INSERT checks. Ordinary
+actor-self Membership SELECT(user_id, status) supports the ACTIVE recheck;
+there is no helper Tenant SELECT or broad Membership SELECT. INSERT uses
+generated IDs, not RETURNING. Function search_path is `pg_catalog, pg_temp`,
+row_security is on, and PUBLIC EXECUTE is revoked within its creation transaction.
+
+Bootstrap reads only the local actor GUC, requires READ COMMITTED, takes an
+actor-specific advisory transaction lock and rechecks ACTIVE Membership after
+the lock. Tenant and OWNER Membership are atomic. Existing ACTIVE Membership
+rejects a second first-workspace request; REVOKED history is preserved and does
+not itself prevent a new workspace. No actor/tenant/role parameter is accepted.
+
+Provisioning order: `db:provision-tenancy --prepare` -> `db:migrate` ->
+`db:grant-auth` (when needed) -> `db:grant-tenancy` ->
+`db:provision-tenancy --finalize`. Prepare uses explicit setup-only
+`DATABASE_PROVISION_URL` and temporarily grants migrator SET capability on the
+helper without inheritance. Initial function EXECUTE grant uses SET LOCAL helper
+inside the grant transaction; finalize revokes membership even on failed setup.
+Public-schema CREATE is temporary inside migration and revoked before commit.
+Repeated runtime grants after finalization need no helper membership. Never
+provide provisioning/admin URLs to the app. Managed-host production setup is
+not validated by this local administrator workflow.
+
+F8 test safety checks targets before clients start: default `*_test` name,
+matching runtime/migration/admin endpoints; an existing dedicated loopback
+synthetic DB requires BOTH process-only `ALLOW_DESTRUCTIVE_DB_TESTS=1` and
+exact `DATABASE_TEST_TARGET=host:port/database`. This is an operator assertion,
+not discovery of disposable data. Fixtures/cleanup remain run-ID bounded.
+Every test DB URL rejects query options, which postgres.js can forward into
+startup parameters and use to override the inspected database/user. Opt-in
+values are captured from the invoking process before loading env files; saved
+file values cannot authorize a run. The browser server explicitly overrides
+migration/provision/test-admin URLs and test approvals to empty strings, keeping
+only the runtime DB credential. Additional connection options require a future
+explicitly validated test-configuration change, not a silent guard exception.
+Upstream auth cleanup can prune expired global records; never run against
+customer data. See [local setup](../README.md#db인증-설정).
 
 ## Design choices considered
 
@@ -413,8 +472,7 @@ its role/ownership checks remain unchanged.
   It is historical attribution, never permanent authorization. No ordinary
   physical Tenant delete; Membership child FK RESTRICTs it.
 - **Indexes:** primary key only; no status/suspended_at or speculative fields.
-- **CURRENT RLS:** ENABLE + FORCE, no policies, no runtime privileges.
-- **PLANNED 1C-2:** active-Membership SELECT, OWNER update, controlled workspace
+- **CURRENT 1C-2:** ENABLE + FORCE, active-Membership SELECT, OWNER update, controlled workspace
   bootstrap; no runtime DELETE.
 
 ## TENANT membership table
@@ -438,8 +496,7 @@ its role/ownership checks remain unchanged.
   attribution-preservation procedure.
 - **Indexes:** `(user_id, status, tenant_id)` for workspace discovery and
   `(tenant_id, status, role)` for member administration.
-- **CURRENT RLS:** ENABLE + FORCE, no policies, no runtime privileges.
-- **PLANNED 1C-2:** actor-only ACTIVE discovery and narrowly authorized workspace
+- **CURRENT 1C-2:** ENABLE + FORCE, actor-only ACTIVE discovery and narrowly authorized workspace
   operations; revocation replaces DELETE. No organization/invitation abstraction.
 
 ## TENANT Case tables
@@ -1126,8 +1183,9 @@ human-decision state.
 
 ## RLS and authorization model
 
-**CURRENT 1C-1:** only ENABLE/FORCE default denial is implemented on Tenant and
-Membership. The context/policy design below is **PLANNED 1C-2 and later**.
+**CURRENT 1C-2:** Tenant/Membership policies, local actor/tenant transactions
+and bootstrap are implemented for the two existing tables. Policies for future
+Case/Evidence/worker tables below remain **PLANNED**; no other table is present.
 
 ### Context establishment
 
@@ -1360,8 +1418,9 @@ The full model is designed now, but migrations remain slice-scoped:
   no tenant/domain tables.
 - **Slice 1C-1:** two tenancy tables, constraints/indexes and ENABLE/FORCE RLS
   default denial are implemented and tested locally; no allow policy/grant.
-- **Slice 1C-2 — PLANNED:** actual policies, actor/tenant transaction context,
-  restricted workspace bootstrap, grants, cross-tenant and pool-reuse tests.
+- **Slice 1C-2 — IMPLEMENTED, local validation:** six policies, actor/tenant
+  transaction context, restricted workspace bootstrap, minimal grants and real
+  cross-tenant/concurrency/pool-reuse tests. No workspace UI or Case tables.
 - **Slice 1C-3 — PLANNED:** workspace creation/selection UI and `/app` integration.
   Seller Shield alone owns authorization; no auth organization plugin.
 - **Slice 1D:** `cases`, `claim_snapshots`, and `case_events`, with their tenant

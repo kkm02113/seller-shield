@@ -1,4 +1,7 @@
 import { defineConfig } from "vitest/config";
+import { loadDatabaseTestEnvironment } from "./tests/helpers/database-test-environment.ts";
+
+loadDatabaseTestEnvironment();
 
 export default defineConfig({
   test: {

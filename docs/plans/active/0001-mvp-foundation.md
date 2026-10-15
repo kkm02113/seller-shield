@@ -6,7 +6,9 @@
 > boundary below on 2026-10-04; Slice 1B-2 is COMPLETED and APPROVED — local/test
 > on 2026-10-06 and committed at `314b0bb`. Slice 1C-1 persistence/default-deny
 > is APPROVED — local/test after final default-build validation on 2026-10-12.
-> Slice 1C-2 onward remains PLANNED. This is the authoritative overall
+> Slice 1C-2 is IMPLEMENTED and locally validated on 2026-10-14, after one focused
+> independent review and a final F8 correction pass. Slice 1C-3 onward remains
+> PLANNED. This is the authoritative overall
 > execution plan; slice-specific plans are subordinate implementation records.
 > Execution must follow the root `AGENTS.md`;
 > do not commit or push unless a later task explicitly requests it.
@@ -40,12 +42,13 @@ The conceptual data model is decided in
 [`docs/DATA_MODEL.md`](../../DATA_MODEL.md), and the implementation-ready
 physical PostgreSQL design is decided in
 [`docs/DATABASE.md`](../../DATABASE.md). Application shell, database tooling,
-four core-auth tables plus `rate_limits`, Tenant/Membership persistence, three
+four core-auth tables plus `rate_limits`, Tenant/Membership persistence, four
 migrations, and the Better Auth Magic Link/onboarding flow now exist, with
-separate runtime/migration roles verified locally. Tenant/Membership RLS is
-ENABLE/FORCE with zero policies; no runtime tenancy grant was added. Remaining
-product-domain tables, production role provisioning, authorization/context/
-bootstrap/UI, and all later product code remain unimplemented until later slices.
+separate runtime/migration roles verified locally. Tenant/Membership keeps
+ENABLE/FORCE RLS with six 1C-2 policies, session-bound context, restricted
+bootstrap and minimal runtime grants. Remaining product-domain tables,
+production role provisioning, workspace UI and later product code remain
+unimplemented until later slices.
 Provider selections explicitly left open below are not capabilities.
 
 ## Global constraints
@@ -157,7 +160,8 @@ None beyond the product name and documentation routes.
 > that fails when no database is configured. Slice 1B-1 persistence and Slice
 > 1B-2 sign-in/onboarding are IMPLEMENTED and APPROVED within local/test limits.
 > Slice 1C-1 persistence/default-deny is APPROVED — local/test on 2026-10-12.
-> Slice 1C-2/3 authorization/workspace UI, 1D (Case/ClaimSnapshot/CaseEvent), and 1E (manual
+> Slice 1C-2 server authorization/bootstrap is IMPLEMENTED with local validation.
+> Slice 1C-3 workspace UI, 1D (Case/ClaimSnapshot/CaseEvent), and 1E (manual
 > Create → Inbox → Detail) remain PLANNED.
 
 Slice 1A validation record: `pnpm install --frozen-lockfile`, `pnpm check`
@@ -329,11 +333,36 @@ changes; existing test-admin credentials were injected only into the DB-test
 process. Approval does not establish 1C-2 authorization, Linux/CI or production
 deployment. User-managed baseline commit must precede 1C-2.
 
-**NOT IMPLEMENTED:** 1C-2 allow policies, actor-first discovery, transaction-local
+**At 1C-1 approval, NOT IMPLEMENTED:** 1C-2 allow policies, actor-first discovery, transaction-local
 actor/tenant context, restricted `create_first_workspace` bootstrap/grants and
 cross-tenant/pool-reuse tests; 1C-3 workspace creation/selection UI and `/app`
 integration. Case/Evidence/marketplace and auth organization plugins remain out
 of scope. This is default-deny infrastructure, not completed tenant authorization.
+
+### Slice 1C-2 — Tenant authorization and workspace bootstrap
+
+IMPLEMENTED, locally validated on 2026-10-14. One independent diff-focused
+review was completed; three F8 findings were reproduced and corrected in one
+final fix pass, with no second review. The [execution plan](0003-tenant-authorization.md)
+records one primary implementer, per-milestone real-DB gates and no automatic
+commits/pushes. Preflight
+confirmed clean `Test` at user-created baseline `1ccd97f`, PostgreSQL connectivity
+and `pnpm check` (51 tests). F8 now guards database/browser test targets.
+One incremental `0003_tenant-authorization.sql`, six policies, server context,
+workspace list/create/OWNER rename and minimal grants are implemented. No
+existing table/column/FK changed. Initial EXECUTE grant must precede helper
+membership finalization; real `42501` evidence corrected provisioning order,
+not the tenancy model. Workspace UI remains Slice 1C-3. F1/F3/mail timeout and
+identity deletion decisions are separate follow-up/production gates.
+
+Final validation: pinned frozen install, `pnpm check` (18 files / 65 tests),
+`pnpm test:db` (10 files / 58 tests), default Turbopack `pnpm build`, existing
+Edge/capture-mail `pnpm test:browser` (3 tests), and `git diff --check` passed.
+`pnpm db:generate` reported no schema drift. Distinct-backend bootstrap advisory
+wait, both revocation race directions, physical-connection reuse and actual
+production `requireUser()` session binding are covered. Applied older migrations,
+dependencies/lockfile and the user's external review report are unchanged.
+This does not validate Linux/CI, managed production provisioning or real mail delivery.
 
 ### Whole Slice 1 goal
 

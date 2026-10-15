@@ -14,14 +14,19 @@ As of 2026-10-12 the Slice 0 shell, approved Slice 1A PostgreSQL/Drizzle
 foundation, Slice 1B-1 Better Auth persistence, and Slice 1B-2 Magic Link flow
 are **IMPLEMENTED** within the local validation boundaries below. Four GLOBAL
 core auth tables plus official `rate_limits`, DB sessions, and non-owner runtime
-CRUD grants exist. Slice 1C-1 adds Tenant/Membership persistence and ENABLE/FORCE
-RLS with zero policies, validated against real PostgreSQL. Its default Turbopack
+CRUD grants exist. At the Slice 1C-1 baseline, Tenant/Membership persistence had
+ENABLE/FORCE RLS with zero policies, validated against real PostgreSQL. Its default Turbopack
 build gate passed in the working tree and an identical fresh Windows snapshot
 on 2026-10-12; no architecture/configuration/security-policy change was required.
-Slice 1C-1 is **APPROVED — local/test**; the validation record is in the
+Slice 1C-1 is **APPROVED — local/test**. Slice 1C-2 server authorization,
+transaction context and restricted workspace services are implemented and
+locally validated on 2026-10-14. One focused independent review identified three
+F8 test-safety issues; these were reproduced, corrected and regression-tested.
+This is local implementation evidence, not production deployment approval.
+The validation record is in the
 [active plan](plans/active/0001-mvp-foundation.md).
 Real Resend delivery remains unverified. Case/Evidence and other product
-tables, storage, tenant authorization/isolation, AI,
+tables, storage, workspace UI, AI,
 export, worker, and deployment remain **NOT IMPLEMENTED**. Local database setup
 is not production provisioning or proof of tenant isolation.
 
@@ -215,22 +220,44 @@ The conceptual model and future schema constraints are defined in
 [`docs/DATA_MODEL.md`](DATA_MODEL.md). The approved physical PostgreSQL table,
 constraint, index, and RLS policy design is in
 [`docs/DATABASE.md`](DATABASE.md). Four GLOBAL core auth tables, official
-`rate_limits`, and two tenancy tables exist through three reviewed migrations.
+`rate_limits`, and two tenancy tables exist through four reviewed migrations.
 Production role provisioning, automated test-database lifecycle, remaining
-product tables, and RLS allow policies remain **NOT IMPLEMENTED**.
+product tables remain **NOT IMPLEMENTED**.
 
 ### Slice 1C-1 — IMPLEMENTED, local validation
 
-`src/platform/db/schema/tenancy.ts` defines only Tenant/Membership persistence.
+At 1C-1 approval, `src/platform/db/schema/tenancy.ts` defined only persistence.
 `drizzle/0002_tenancy-foundation.sql` adds their constraints/indexes and ENABLE +
 FORCE RLS; pinned Drizzle models ENABLE, while FORCE is explicit reviewed SQL.
-No runtime tenancy grants, allow policies, actor/tenant context, bootstrap
+At that boundary no runtime tenancy grants, allow policies, actor/tenant context, bootstrap
 function or workspace UI exist. The runtime is ACL-denied; real owner-role
 probes independently prove FORCE-RLS denial against committed synthetic rows.
 Existing setup/admin credentials are injected only into the dedicated test
 process for fixture/constraint work, never exposed to the application. See
 [the physical validation boundary](DATABASE.md#slice-1c-1-foundation--implemented-local-validation).
 This is not completed multi-tenant authorization or cross-tenant workflow proof.
+
+### Slice 1C-2 — IMPLEMENTED, local validation
+
+`src/platform/db/tenant-context.ts` provides actor-first READ COMMITTED
+transactions. `src/modules/identity/application/context.ts` binds identity to
+the existing verified `requireUser()` session, never a client actor/role hint.
+ACTIVE Membership is locked with FOR SHARE, then the canonical tenant GUC is
+set locally; callbacks receive that same transaction. Commit/rollback clears
+context before pooled reuse. No global DB query belongs inside those callbacks.
+
+Workspace application services expose own-ACTIVE discovery, first-workspace
+creation and OWNER-only rename, without an HTTP/UI adapter. Reviewed migration
+`0003_tenant-authorization.sql` contains six policies and one helper-owned
+SECURITY DEFINER function. Provisioning grants a migrator-only temporary helper
+role for ownership/EXECUTE setup, then revokes it; runtime cannot SET ROLE helper.
+See [exact role/policy scope](DATABASE.md#slice-1c-2-authorization--implemented-local-validation).
+
+`/app` remains auth-only. Workspace creation/selection UI is 1C-3; Case/Evidence,
+membership administration, invitations and production provisioning are absent.
+Shared DB-role GUCs trust server-side session binding, not arbitrary SQL clients.
+Real email, proxy/recipient controls, deletion policy and deployment gates remain
+separate from local tenant authorization validation.
 
 ## Authentication and tenant model
 
@@ -360,7 +387,7 @@ MVP roles:
 - `OPERATOR`: case, evidence, policy, and response-draft work.
 - `REVIEWER`: review/approve packages and record submissions/outcomes.
 
-**PLANNED — Slice 1C-2 authorization boundary:**
+**IMPLEMENTED, local validation — Slice 1C-2 authorization boundary:**
 
 One person may have multiple memberships. A session authenticates a user; it
 does not authorize a tenant. Each request resolves membership server-side and

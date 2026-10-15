@@ -48,11 +48,13 @@ describe("Seller Shield tenancy persistence contract", () => {
     expect(getTableConfig(table).foreignKeys.map((fk) => fk.onDelete)).toEqual(["restrict", "restrict", "restrict"]);
   });
 
-  it("enables policy-free RLS on both tenancy tables", () => {
+  it("enables RLS with the narrowly scoped reviewed policy contract", () => {
     for (const name of ["tenants", "memberships"]) {
       const config = getTableConfig(tenancyTable(name));
       expect(config.enableRLS).toBe(true);
-      expect(config.policies).toEqual([]);
+      expect(config.policies.map((policy) => policy.name).sort()).toEqual(name === "tenants"
+        ? ["tenants_bootstrap_insert", "tenants_member_select", "tenants_owner_update"]
+        : ["memberships_actor_lock", "memberships_actor_select", "memberships_bootstrap_insert"]);
     }
   });
 });

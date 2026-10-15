@@ -1,9 +1,10 @@
 import { defineConfig } from "@playwright/test";
 
 import { requireAuthEnvironment } from "./src/platform/auth/env";
-import { loadDatabaseEnvironment } from "./src/platform/db/local-env";
+import { loadDatabaseTestEnvironment } from "./tests/helpers/database-test-environment.ts";
+import { browserServerEnvironment } from "./tests/helpers/browser-server-environment.ts";
 
-loadDatabaseEnvironment();
+loadDatabaseTestEnvironment();
 // Dedicated local test server and capture handler share only a synthetic
 // secret. Never require, persist or reuse a production authentication secret.
 process.env.BETTER_AUTH_SECRET = "Synthetic-browser-test-secret.0123456789!";
@@ -29,10 +30,7 @@ export default defineConfig({
     command: `pnpm start --hostname ${origin.hostname} --port ${origin.port || "80"}`,
     url: `${baseURL}/api/health`,
     reuseExistingServer: false,
-    env: {
-      BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
-      BETTER_AUTH_URL: baseURL,
-    },
+    env: browserServerEnvironment(process.env.BETTER_AUTH_SECRET, baseURL),
     timeout: 60_000,
   },
 });

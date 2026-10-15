@@ -3,9 +3,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import postgres from "postgres";
 
 import { requireDatabaseUrl, requireMigrationDatabaseUrl } from "../src/platform/db/env";
-import { loadDatabaseEnvironment } from "../src/platform/db/local-env";
+import { loadDatabaseTestEnvironment } from "./helpers/database-test-environment";
 
-loadDatabaseEnvironment();
+loadDatabaseTestEnvironment();
 const runtimeUrl = requireDatabaseUrl(process.env);
 const ownerUrl = requireMigrationDatabaseUrl(process.env);
 // Explicit test-only existing admin boundary: never fall back to runtime/owner
@@ -76,7 +76,7 @@ describe("Tenant/Membership ↔ real PostgreSQL persistence", () => {
     ]);
   });
 
-  it("enables and forces RLS with zero policies on both tables", async () => {
+  it("enables and forces RLS with only the approved allow policies", async () => {
     const tables = await owner`select c.relname, c.relrowsecurity, c.relforcerowsecurity
       from pg_class c join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'public' and c.relname in ('tenants', 'memberships') order by c.relname`;
@@ -84,7 +84,9 @@ describe("Tenant/Membership ↔ real PostgreSQL persistence", () => {
       { relname: "memberships", relrowsecurity: true, relforcerowsecurity: true },
       { relname: "tenants", relrowsecurity: true, relforcerowsecurity: true },
     ]);
-    expect(await owner`select policyname from pg_policies where schemaname = 'public'`).toEqual([]);
+    const policies = await owner`select policyname from pg_policies where schemaname = 'public' order by policyname`;
+    expect(policies.map((row) => row.policyname)).toEqual(["memberships_actor_lock", "memberships_actor_select",
+      "memberships_bootstrap_insert", "tenants_bootstrap_insert", "tenants_member_select", "tenants_owner_update"]);
   });
 
   it("has exact columns, defaults, UUIDs, timestamptz, and the approved role enum", async () => {
@@ -227,7 +229,7 @@ describe("Tenant/Membership ↔ real PostgreSQL persistence", () => {
     });
   });
 
-  it("keeps runtime non-owner, unprivileged on tenancy and unable to change roles", async () => {
+  it("keeps runtime non-owner with SELECT only at table level and narrow column UPDATE grants", async () => {
     const [role] = await runtime`select r.rolsuper, r.rolcreatedb, r.rolcreaterole, r.rolreplication, r.rolbypassrls,
       has_database_privilege(current_user, current_database(), 'CREATE') as db_create,
       has_schema_privilege(current_user, 'public', 'CREATE') as schema_create from pg_roles r where rolname = current_user`;
@@ -235,24 +237,31 @@ describe("Tenant/Membership ↔ real PostgreSQL persistence", () => {
     const tables = await runtime`select c.relname,
       c.relowner = (select oid from pg_roles where rolname = current_user) as runtime_owner,
       pg_has_role(current_user, c.relowner, 'MEMBER') as owner_member,
-      has_table_privilege(current_user, c.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') as any_privilege
+      has_table_privilege(current_user, c.oid, 'SELECT') as select_privilege,
+      has_table_privilege(current_user, c.oid, 'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') as broad_write
       from pg_class c join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = 'public' and c.relname in ('tenants','memberships') order by c.relname`;
     expect(tables).toEqual([
-      { relname: "memberships", runtime_owner: false, owner_member: false, any_privilege: false },
-      { relname: "tenants", runtime_owner: false, owner_member: false, any_privilege: false },
+      { relname: "memberships", runtime_owner: false, owner_member: false, select_privilege: true, broad_write: false },
+      { relname: "tenants", runtime_owner: false, owner_member: false, select_privilege: true, broad_write: false },
     ]);
+    const columns = await runtime`select table_name, column_name,
+      has_column_privilege(current_user, 'public.' || table_name, column_name, 'UPDATE') as can_update
+      from information_schema.columns where table_schema = 'public' and table_name in ('tenants', 'memberships')`;
+    expect(columns.filter((column) => column.can_update).map((column) => `${column.table_name}.${column.column_name}`).sort())
+      .toEqual(["memberships.id", "tenants.name", "tenants.updated_at"]);
     await rejectsCode(runtime.begin(async (tx) => {
       await tx`set local role ${tx(decodeURIComponent(new URL(ownerUrl).username))}`;
     }), "42501");
   });
 
-  it("denies actual runtime SELECT/INSERT/UPDATE/DELETE against committed fixtures", async () => {
+  it("denies no-context runtime visibility and mutations against committed fixtures", async () => {
     await withFixture(async (fixture) => {
       for (const table of ["tenants", "memberships"]) {
         const id = table === "tenants" ? fixture.tenant : fixture.member;
-        await rejectsCode(runtime`select id from ${runtime(`public.${table}`)} where id = ${id}`, "42501");
-        await rejectsWrite(runtime, async (tx) => tx`update ${tx(`public.${table}`)} set id = id where id = ${id}`);
+        expect(await runtime`select id from ${runtime(`public.${table}`)} where id = ${id}`).toEqual([]);
+        if (table === "tenants") await rejectsWrite(runtime, async (tx) => tx`update public.tenants set id = id where id = ${id}`);
+        else expect(await runtime`update public.memberships set id = id where id = ${id} returning id`).toEqual([]);
         await rejectsWrite(runtime, async (tx) => tx`delete from ${tx(`public.${table}`)} where id = ${id}`);
       }
       await rejectsWrite(runtime, async (tx) => tx`insert into public.tenants (name, created_by_user_id) values ('Denied', ${fixture.creator})`);
@@ -290,8 +299,9 @@ describe("Tenant/Membership ↔ real PostgreSQL persistence", () => {
     });
   });
 
-  it("has no workspace bootstrap or SECURITY DEFINER functions", async () => {
+  it("has only the approved helper-owned workspace bootstrap SECURITY DEFINER function", async () => {
     expect(await owner`select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-      where n.nspname = 'public' and (p.prosecdef or p.proname = 'create_first_workspace')`).toEqual([]);
+      where n.nspname = 'public' and (p.prosecdef or p.proname = 'create_first_workspace')`)
+      .toEqual([{ proname: "create_first_workspace" }]);
   });
 });

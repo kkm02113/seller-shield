@@ -5,9 +5,9 @@ import {
   createDatabaseConnection,
 } from "../src/platform/db/connection";
 import { requireDatabaseUrl } from "../src/platform/db/env";
-import { loadDatabaseEnvironment } from "../src/platform/db/local-env";
+import { loadDatabaseTestEnvironment } from "./helpers/database-test-environment";
 
-loadDatabaseEnvironment();
+loadDatabaseTestEnvironment();
 
 describe("PostgreSQL connectivity", () => {
   it("executes SELECT 1 through the real PostgreSQL driver", async () => {

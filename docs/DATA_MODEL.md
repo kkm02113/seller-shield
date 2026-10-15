@@ -11,9 +11,11 @@ not define database columns, SQL, migrations, or implemented behavior.
   semantics described here.
 - **IMPLEMENTED, LOCAL VALIDATION:** GLOBAL auth persistence/sign-in, and Slice
   1C-1 Tenant/Membership physical constraints + ENABLE/FORCE default-deny RLS.
+  Slice 1C-2 adds actor-first authorization/context and restricted workspace
+  application services; final regression/review is in progress.
   Exact physical status/validation is owned by [`DATABASE.md`](DATABASE.md).
-- **PLANNED / NOT IMPLEMENTED:** remaining product tables, actual tenant
-  authorization policies/context/bootstrap, workspace UI, storage, and jobs.
+- **PLANNED / NOT IMPLEMENTED:** remaining product tables, workspace UI,
+  membership administration, storage, and jobs.
 - **OPEN:** provider choices, retention periods, physical deletion schedules,
   and the operational parameters listed at the end of this document.
 
@@ -633,9 +635,9 @@ parent in Tenant B.
 
 ## PostgreSQL RLS strategy
 
-**CURRENT 1C-1:** Tenant/Membership persistence exists with ENABLE/FORCE RLS and
-zero policies. No runtime tenancy privileges were added. The request context,
-allow policies and cross-tenant/pool workflow below remain **PLANNED 1C-2**;
+**CURRENT 1C-2:** Tenant/Membership retain ENABLE/FORCE RLS with narrow policies
+and grants. The actor-first context, workspace server operations and real
+cross-tenant/pool/race tests are implemented within the local validation boundary;
 workspace UI remains **PLANNED 1C-3**. Authentication alone still grants no Tenant access.
 
 ### Request transaction boundary

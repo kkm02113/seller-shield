@@ -5,10 +5,10 @@ import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { createAuthentication } from "../src/platform/auth/factory";
 import { createDatabaseConnection } from "../src/platform/db/connection";
 import { requireDatabaseUrl } from "../src/platform/db/env";
-import { loadDatabaseEnvironment } from "../src/platform/db/local-env";
+import { loadDatabaseTestEnvironment } from "./helpers/database-test-environment";
 import { CaptureEmailSender } from "./helpers/capture-email-sender";
 
-loadDatabaseEnvironment();
+loadDatabaseTestEnvironment();
 const connection = createDatabaseConnection(requireDatabaseUrl(process.env), { maxConnections: 4 });
 const environment = { secret: "Synthetic-Magic-Link-secret.0123456789!", baseURL: "http://localhost:3000" };
 const sender = new CaptureEmailSender();

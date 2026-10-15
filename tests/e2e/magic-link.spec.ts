@@ -7,7 +7,9 @@ import { createAuthentication } from "../../src/platform/auth/factory";
 import { createDatabaseConnection } from "../../src/platform/db/connection";
 import { requireDatabaseUrl } from "../../src/platform/db/env";
 import { CaptureEmailSender } from "../helpers/capture-email-sender";
+import { assertDatabaseTestTarget } from "../helpers/database-test-target";
 
+assertDatabaseTestTarget(process.env);
 const environment = requireAuthEnvironment(process.env);
 const connection = createDatabaseConnection(requireDatabaseUrl(process.env), { maxConnections: 2 });
 const sender = new CaptureEmailSender();

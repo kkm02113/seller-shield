@@ -7,9 +7,9 @@ import { describe, expect, it } from "vitest";
 import { createAuthentication } from "../src/platform/auth/factory";
 import { createDatabaseConnection } from "../src/platform/db/connection";
 import { requireDatabaseUrl } from "../src/platform/db/env";
-import { loadDatabaseEnvironment } from "../src/platform/db/local-env";
+import { loadDatabaseTestEnvironment } from "./helpers/database-test-environment";
 
-loadDatabaseEnvironment();
+loadDatabaseTestEnvironment();
 const runtimeUrl = requireDatabaseUrl(process.env);
 const run = promisify(execFile);
 

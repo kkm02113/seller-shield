@@ -10,7 +10,7 @@
 
 ## 현재 상태
 
-현재는 MVP의 개발·DB 기반과 이메일 인증 흐름까지 로컬 검증한 단계입니다.
+현재는 DB·이메일 인증 기반에 서버 측 workspace 권한 경계를 추가한 단계입니다.
 
 | 단계 | 구현 범위 | 상태 |
 | --- | --- | --- |
@@ -19,11 +19,13 @@
 | Slice 1B-1 | Better Auth 핵심 테이블, DB 세션, 런타임 CRUD 권한 | 구현·로컬 검증 완료 |
 | Slice 1B-2 | Magic Link, 확인 화면, 이름 입력, 세션·로그아웃 | 구현·캡처 메일/실DB/Edge 검증; 실제 메일 발송 미검증 |
 | Slice 1C-1 | Tenant/Membership 스키마·제약조건·ENABLE/FORCE RLS | APPROVED — local/test; 실DB·기본 build 검증 완료 |
+| Slice 1C-2 | RLS 허용 정책, 세션 기반 transaction context, 제한된 workspace 서버 서비스 | 구현·로컬 회귀 검증 완료; 독립 리뷰 1회 후 F8 보완 |
 
-**아직 구현하지 않은 것:** 테넌트 허용 정책·actor/tenant context·workspace bootstrap/UI,
+**아직 구현하지 않은 것:** workspace 생성·선택 UI 및 `/app` 연결,
 케이스·증거 관리, AI 지원, 마켓플레이스 연동, PDF 내보내기.
 현재 홈 화면에는 케이스나 마켓플레이스 데이터가 없습니다.
-인증은 사용자 식별만 제공합니다. 판매자 조직의 권한이나 테넌트 격리는 아직 없습니다.
+인증 자체는 사용자 식별만 제공합니다. 서버 서비스는 ACTIVE Membership을 별도로 검증하지만,
+현재 `/app`은 여전히 인증 확인용 화면이며 조직 생성·선택 화면은 없습니다.
 실제 고객 운영은 [보안 문서의 미해결 승인 조건](docs/SECURITY.md#slice-1b-2-controls--implemented-local-validation)으로 차단되어 있습니다.
 
 다음 단계와 검증 범위는 [MVP 구현 계획](docs/plans/active/0001-mvp-foundation.md)에서 확인할 수 있습니다.
@@ -93,27 +95,57 @@ if (-not (Test-Path .env.local)) {
 node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
 ```
 
-설정이 끝나면 DB 게이트를 실행합니다.
+설정이 끝나면 기존 setup 관리자 URL을 `DATABASE_PROVISION_URL`로 이 설정 프로세스에만
+주입한 뒤 다음 순서로 실행합니다. 관리자 값을 앱 환경에 남기지 마세요.
 
 ```powershell
 pnpm db:check
-pnpm db:migrate
-pnpm db:grant-auth
-pnpm test:db
+pnpm db:provision-tenancy --prepare
+if ($LASTEXITCODE -ne 0) { throw "Tenancy preparation failed" }
+try {
+  pnpm db:migrate
+  if ($LASTEXITCODE -ne 0) { throw "Migration failed" }
+  pnpm db:grant-auth
+  if ($LASTEXITCODE -ne 0) { throw "Auth grant failed" }
+  pnpm db:grant-tenancy
+  if ($LASTEXITCODE -ne 0) { throw "Tenancy grant failed" }
+} finally {
+  pnpm db:provision-tenancy --finalize
+  Remove-Item Env:DATABASE_PROVISION_URL -ErrorAction SilentlyContinue
+}
 ```
 
-현재 세 migration은 인증 테이블 5개와 `tenants`, `memberships`만 생성합니다.
-새 테넌트 테이블은 ENABLE/FORCE RLS + 정책 없음으로 기본 거부 상태입니다.
+현재 네 migration은 인증 테이블 5개와 `tenants`, `memberships`만 생성합니다.
+ENABLE/FORCE RLS는 유지하고, 명시적인 정책과 최소 column grant로 접근을 제한합니다.
 `db:grant-auth`는 같은 DB의 별도 migration 계정으로 인증 테이블 5개의 CRUD 권한만 부여하며,
 런타임 계정에 소유권·schema CREATE 권한을 주거나 계정을 생성하지 않습니다.
-테넌트 권한은 부여하지 않으므로 앱에서 Tenant를 조회할 수 없는 것이 의도된 상태입니다.
-자세한 범위는 [테넌트 DB 기반 문서](docs/DATABASE.md#slice-1c-1-foundation--implemented-local-validation)를 참고하세요.
+`db:grant-tenancy`는 SELECT, workspace 이름 변경, Membership 잠금용 column UPDATE와
+bootstrap 함수 EXECUTE만 부여합니다. 함수 권한은 migrator의 임시 helper 역할로 부여하고
+`--finalize`가 그 역할을 회수합니다. 런타임에는 helper 역할·일반 INSERT/DELETE를 주지 않습니다.
+자세한 범위는 [테넌트 권한 문서](docs/DATABASE.md#slice-1c-2-authorization--implemented-local-validation)를 참고하세요.
 
 테넌트 실DB 테스트에는 기존 런타임·migration URL 외에 `DATABASE_TEST_ADMIN_URL`을
 테스트 프로세스에 별도로 제공해야 합니다. 같은 전용 로컬/테스트 DB의 기존 setup 관리자
 계정을 사용하며, 새 역할을 만들거나 RLS를 끄지 않습니다. 이 값이 없으면 테스트가 실패합니다.
 관리자는 합성 fixture 준비·제약조건 검증·정리만 수행하며 런타임 접근 검증을 대신하지 않습니다.
 앱/배포 환경에는 관리자 자격 증명을 제공하지 마세요.
+
+F8 안전장치가 DB/browser 테스트의 연결 전에 대상 DB를 확인합니다. 기본적으로 DB 이름은
+`*_test`여야 하고 모든 URL의 host·port·DB가 같아야 합니다. 드라이버의 대상/사용자 override를
+막기 위해 테스트 DB URL의 query 옵션은 전부 거부합니다. 기존 전용 합성 로컬 DB를 사용할
+때만 다음 두 값을 테스트 프로세스에 명시적으로 지정합니다. `_test` 이름이나 opt-in은
+데이터가 폐기 가능하다는 자동 증명이 아닙니다. 고객 DB를 대상으로 실행하지 마세요.
+두 opt-in 값은 `.env` 파일에서 읽지 않습니다. Browser 테스트의 Next 자식 서버에는
+runtime URL만 유지하고 migration/provision/test-admin URL 및 opt-in을 빈 값으로 차단합니다.
+
+```powershell
+# DATABASE_URL의 실제 host/port/DB와 정확히 맞춰야 합니다.
+$env:ALLOW_DESTRUCTIVE_DB_TESTS = "1"
+$env:DATABASE_TEST_TARGET = "localhost:5432/seller_shield"
+try { pnpm test:db } finally {
+  Remove-Item Env:ALLOW_DESTRUCTIVE_DB_TESTS, Env:DATABASE_TEST_TARGET -ErrorAction SilentlyContinue
+}
+```
 
 인증 handler는 `/api/auth/[...all]`에 연결되어 있습니다. `/sign-in`에서 이메일을 입력하면
 메일의 `/auth/verify#token=...` 링크를 열고 **로그인 계속**을 눌러 인증합니다.
@@ -146,6 +178,8 @@ DB 명령어는 기존 프로세스 환경 변수 → `.env.local` → `.env` �
 | `pnpm db:migrate` | migration 계정으로 저장소의 migration 적용 |
 | `pnpm db:check` | 런타임 계정으로 실제 `SELECT 1` 실행 |
 | `pnpm db:grant-auth` | 다섯 인증 기반 테이블의 런타임 CRUD 권한 부여 |
+| `pnpm db:provision-tenancy --prepare/--finalize` | 설정 전용 관리자로 제한된 helper 준비·migrator 임시 역할 회수 |
+| `pnpm db:grant-tenancy` | 두 tenancy 테이블의 최소 column grant와 bootstrap EXECUTE 권한 부여 |
 
 일반 코드 검증과 production build는 별도의 게이트입니다.
 

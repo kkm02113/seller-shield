@@ -1,7 +1,7 @@
 # Seller Shield security and privacy
 
 These are durable requirements and approved architecture controls. Only the
-Slice 1A/1B-1/1B-2/1C-1 local database/auth controls identified below are
+Slice 1A/1B-1/1B-2/1C-1/1C-2 local database/auth controls identified below are
 implemented; the public shell still contains no tenant/product workflow.
 
 ## Status
@@ -18,15 +18,20 @@ lookup/expiry/revocation with cookie caching disabled, validated server-only
 auth environment access, redacted auth errors, and non-owner runtime CRUD
 grants; Magic Link hashed single-use tokens, non-consuming confirmation, fixed
 redirects, server-side name onboarding, and official DB IP/path limiting.
-Slice 1C-1 adds Tenant/Membership constraints and ENABLE/FORCE RLS with zero
-policies. Runtime tenancy access is ACL-denied; non-bypass owner probes verify
-FORCE-RLS default denial independently. No runtime tenancy grant was added.
-Code lives in `src/platform/auth/`, `src/platform/email/`, `src/platform/db/schema/`
-and auth pages; real PostgreSQL and Edge checks use synthetic/captured email.
-This is not proof of real Resend delivery, tenant isolation or production deployment.
+Slice 1C-1 added Tenant/Membership constraints and ENABLE/FORCE default-deny RLS.
+Slice 1C-2 adds six narrow policies, session-bound actor/tenant transactions,
+Membership locks, restricted bootstrap and minimal grants. Cross-tenant,
+same-physical-connection commit/rollback and bootstrap/revocation race tests
+pass locally, including forced distinct-backend advisory-lock contention.
+One independent review identified three F8 test-safety defects; regression
+tests reproduced each before correction and passed afterward. Full checks,
+real-DB regression, default build and existing Edge tests passed again.
+Code lives in `src/platform/auth/`, `src/platform/email/`, `src/platform/db/`,
+`src/modules/identity/` and auth pages; PostgreSQL and Edge checks use synthetic/captured email.
+This is not proof of real Resend delivery, product-domain isolation for tables
+not yet built, or production deployment.
 
-`NOT IMPLEMENTED`: tenant authorization/RLS allow policies, actor/tenant context,
-workspace bootstrap/UI, cross-tenant workflow proof, object
+`NOT IMPLEMENTED`: workspace UI, Case/Evidence workflow isolation, object
 access, evidence hashing, general structured logging/audit events, and provider
 data controls.
 
@@ -76,14 +81,31 @@ Tenant access. See the [implemented flow](ARCHITECTURE.md#slice-1b-2--implemente
 
 ## Tenant isolation and authorization
 
-- Slice 1C-1 is persistence/default-deny infrastructure only, not completed
-  tenant authorization. Actor-first discovery, actual policies, restricted
-  SECURITY DEFINER bootstrap and connection-pool/cross-tenant tests belong to
-  1C-2; workspace UI belongs to 1C-3. `/app` remains auth-only.
+- Slice 1C-2 establishes server-side tenancy authorization for the existing
+  Tenant/Membership tables, not a finished product workflow. Workspace UI
+  belongs to 1C-3; `/app` remains auth-only.
 - Existing setup/admin credentials may prepare synthetic constraint fixtures
   only in a dedicated local/test DB through `DATABASE_TEST_ADMIN_URL`. Never
   configure that URL in the application/deployment or substitute it for runtime
   assertions. Tests do not disable RLS, create bypass roles or broaden grants.
+- F8 checks DB/browser test targets before clients initialize. Default target
+  names end in `_test`; a dedicated loopback synthetic DB needs an explicit
+  matching target and process-only destructive-test opt-in. Saved env-file flags
+  cannot authorize a run; URL query options are rejected to prevent driver
+  target/user overrides. Browser server children have administrative URLs and
+  test approvals explicitly cleared. Admin URLs never fall back.
+  See [exact guard/setup](DATABASE.md#slice-1c-2-authorization--implemented-local-validation).
+- Production binds actor identity only to `requireUser()`'s verified session.
+  Client actor/role hints are ignored; tenant UUIDs only select a Membership.
+  FOR SHARE holds Membership authorization through operation commit/rollback.
+  All tenant queries use the supplied transaction; GUCs are transaction-local.
+- Shared-role custom GUCs trust the authenticated server. They do not verify
+  arbitrary SQL clients or protect a compromised runtime database credential.
+- Bootstrap uses one helper-owned SECURITY DEFINER function, with no client
+  actor/tenant/role arguments, fixed trusted search_path and PUBLIC EXECUTE
+  revoked. Helper special policies are INSERT-only; actor-self ACTIVE discovery
+  is reused for its recheck. Runtime cannot SET ROLE helper or bypass FORCE RLS.
+  Exact privileges and prepare/grant/finalize order belong to Database.
 
 - Better Auth authenticates a GLOBAL User only. A core Session does not prove
   Tenant membership or a Seller Shield role. Organization/multi-tenant and
@@ -160,6 +182,9 @@ Tenant access. See the [implemented flow](ARCHITECTURE.md#slice-1b-2--implemente
 - Ensure copies, derived artifacts, logs, backups, and external processors are
   covered by the retention and deletion design.
 - Concrete periods and deletion workflows are `NOT YET IMPLEMENTED / UNKNOWN`.
+- Before real customer data is accepted, decide identity deletion/anonymization
+  and preserved attribution. Existing User RESTRICT FKs must not be weakened
+  or changed to CASCADE as an incidental authorization fix.
 - An active package/legal/security retention hold blocks physical byte deletion.
   Unlinking Evidence or logically deleting a Case never removes approved
   package history or Artifact tombstones.
@@ -202,6 +227,16 @@ Tenant access. See the [implemented flow](ARCHITECTURE.md#slice-1b-2--implemente
   or export, and failures must not advance workflow state.
 
 ## Change requirement
+
+### Separate follow-up gates (not implemented by Slice 1C-2)
+
+- F1: establish deployment proxy/origin trust and server-side recipient mail
+  limits before public real-email use. IP header names alone are not proof of
+  trustworthy source IPs; limit values require an explicit operational decision.
+- F3 and mail timeout: add actual sign-in Route Handler-to-sender wiring and
+  signal/abort regression checks in a separate small task; existing captured
+  browser POST and isolated sender tests do not establish that merged path.
+- Concrete identity deletion/retention remains a real-customer prerequisite.
 
 Any implementation touching authentication, authorization, tenant-owned data,
 evidence, external providers, deletion, audit records, or model prompts must
