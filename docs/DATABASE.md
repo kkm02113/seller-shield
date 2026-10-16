@@ -7,12 +7,13 @@ specification for Seller Shield MVP v0.1. It translates the conceptual model
 in [`DATA_MODEL.md`](DATA_MODEL.md) into proposed tables, columns, constraints,
 indexes, deletion behavior, and Row-Level Security policy intent.
 
-- **DECIDED DESIGN / NOT IMPLEMENTED:** the product tables, columns,
+- **DECIDED DESIGN / NOT IMPLEMENTED:** the remaining product tables, columns,
   relationships, RLS policies, worker roles, and queue behavior below remain
   approved design, not an implemented business schema. The Slice 1A
   infrastructure/local-role, five GLOBAL auth-infrastructure tables, and Slice
   1C-1's two tenancy tables and 1C-2's authorization policies/function are
-  recorded separately below. No other product-domain table is implemented.
+  recorded separately below. Slice 1D-1 adds only `cases`, `claim_snapshots`,
+  and `case_events`; their CURRENT persistence boundary is recorded below.
 - **OPEN:** the operational and provider choices listed at the end remain open.
 - **OUT OF SCOPE:** this document does not contain migration SQL, TypeScript
   Drizzle definitions, or application code; the local validation record is not
@@ -109,7 +110,8 @@ schema/role/policy changes. Slice 1C-1 is **APPROVED — local/test**; see the
 [build-gate record](plans/active/0001-mvp-foundation.md). Linux/production is not verified.
 
 **CURRENT:** 1C-3 connects workspace UI to the authorization services without
-schema/RLS/grant changes. Case authorization remains NOT IMPLEMENTED.
+schema/RLS/grant changes. Slice 1D-1 adds Case persistence authorization below,
+not Case services or UI.
 
 ## Slice 1C-2 authorization — IMPLEMENTED, local validation
 
@@ -190,6 +192,55 @@ Three choices materially shape the schema:
 
 These choices are the smallest options that preserve tenant isolation,
 auditability, and the already approved domain model.
+
+## Slice 1D-1 persistence — IMPLEMENTED, local validation
+
+On 2026-10-16, reviewed `0004_case-persistence.sql` adds exactly three tables,
+two lifecycle enums, eight RESTRICT FKs, four secondary query indexes and seven
+policies. All three tables have ENABLE + FORCE RLS and migrator ownership.
+Current public inventory is ten tables and thirteen policies; migration history
+contains five rows. Existing migrations, roles, bootstrap and tenancy policies
+are unchanged. No CaseRelation or other product table is created.
+
+`pnpm db:grant-cases` runs separately as the migration owner, targeting the
+distinct non-helper runtime named by `DATABASE_URL` on the same database. Both
+URLs must omit query options (including SSL options; configure transport out of
+band if needed). It rejects elevated/owner/helper-member/schema-creating runtime
+roles, missing FORCE RLS or unexpected broad/column write ACLs. It is idempotent
+and logs no raw connection or SQL error details. It does not provision roles.
+
+- SELECT: matching local tenant + actor's own ACTIVE Membership, all three roles.
+- INSERT: OWNER/OPERATOR, same scope and current actor attribution; Case must
+  default to DRAFT, no closure disposition or logical deletion. Only explicit
+  INSERT columns are granted; lifecycle columns are excluded.
+- Case UPDATE: OWNER/OPERATOR in DRAFT/GATHERING_EVIDENCE, both USING/WITH CHECK;
+  only title, marketplace, external references, due/last-activity/updated times.
+  No id/tenant/creator/state/disposition/logical-deletion UPDATE privilege.
+- ClaimSnapshot/CaseEvent: no UPDATE/DELETE; no physical Case DELETE. Nullable
+  attribution FKs currently RESTRICT identity deletion. SET NULL needs a future
+  approved retained-attribution/deletion procedure; no existing User FK changed.
+- Event storage kinds: CASE_CREATED, CLAIM_SNAPSHOT_ADDED, STATE_CHANGED,
+  CASE_CLOSED; runtime currently permits only the first two. Only HUMAN with a
+  non-null actor is supported; reserved job id must be NULL. Metadata must be
+  `{}` and is not runtime-writeable. Nonempty versioned metadata/worker support
+  requires an explicit later contract, not arbitrary JSON.
+
+**Write-consumer contract:** Drizzle 0.45.3 full-schema `.insert(table)` emits
+omitted columns as DEFAULT, which still requires their INSERT privileges.
+Use explicit-column parameterized SQL through the supplied tenant transaction;
+do not widen lifecycle/job/metadata grants to accommodate generic inserts.
+Runtime atomic Case/source/event transactions are verified at this boundary,
+but application creation, revision allocation/retry, transitions, duplicate
+suspicion and UI remain NOT IMPLEMENTED (1D-2/1D-3). The database does not itself
+require every Case to have a snapshot/event; that orchestration belongs to 1D-2.
+Digest storage checks 32-byte shape, not source authenticity or recomputation.
+
+Real runtime tests cover exact foreign UUIDs, composite-FK attacks, role bounds,
+missing/malformed/forged/revoked context, immutable history, deletion denial,
+same-backend context cleanup, distinct-backend revision contention (23505) and
+three-table rollback. Administrator probes separately verify physical CHECKs
+and bounded fixture cleanup. This is synthetic local/test evidence, not
+production validation or real-customer approval.
 
 ## Physical conventions
 
@@ -504,6 +555,10 @@ its role/ownership checks remain unchanged.
 
 ### `cases`
 
+**CURRENT 1D-1:** persistence only; full enum storage is not transition authority.
+No runtime lifecycle/logical-delete write path exists. See the current grant
+and consumer contract above; the lifecycle in Claims remains authoritative.
+
 - **Purpose:** workflow aggregate root; not an external claim row.
 - **Key:** tenant UUID convention.
 - **Columns:** `tenant_id`, `title text NOT NULL`, `marketplace text NULL`,
@@ -541,10 +596,13 @@ its role/ownership checks remain unchanged.
   present; digest is 32 bytes. `raw_payload` preserves source shape and is not a
   substitute for Case query fields.
 - **Constraints/FKs:** `UNIQUE (tenant_id, case_id, revision)`; composite Case
-  FK; actor User SET NULL only with retained attribution in events.
+  FK; CURRENT actor User RESTRICT. SET NULL is PLANNED only with an approved
+  retained-attribution/deletion procedure.
 - **Delete/mutability:** immutable and RESTRICTed; a corrected source creates a
   new revision.
-- **Indexes:** `(tenant_id, case_id, revision DESC)`.
+- **Indexes:** CURRENT unique B-tree `(tenant_id, case_id, revision)` also serves
+  backward/latest-revision lookup; no redundant descending index. Revisions are
+  caller-supplied positive Case-local integers, not a global sequence/default.
 - **RLS:** member SELECT; OWNER/OPERATOR INSERT; no UPDATE/DELETE.
 
 ### `case_relations`
@@ -574,8 +632,10 @@ its role/ownership checks remain unchanged.
   `actor_kind text NOT NULL`, `actor_user_id uuid NULL`,
   `source_job_id uuid NULL`, `occurred_at timestamptz NOT NULL`,
   `correlation_id uuid NULL`, `display_metadata jsonb NOT NULL DEFAULT '{}'`.
-- **Checks:** actor kind and actor columns are consistent; display metadata is
-  bounded, versioned, and contains no secrets/signed URLs/source payloads.
+- **Checks:** CURRENT HUMAN actor with non-null User, NULL job id and metadata
+  exactly `{}`; checked event kinds and runtime subset are listed above.
+  PLANNED nonempty metadata must be bounded/versioned and exclude secrets,
+  signed URLs and source payloads; no such payload contract is implemented yet.
 - **Delete/mutability:** append-only, Case RESTRICT.
 - **Indexes:** `(tenant_id, case_id, occurred_at, id)`.
 - **RLS:** member SELECT; INSERT only as part of an authorized domain
@@ -1425,8 +1485,9 @@ The full model is designed now, but migrations remain slice-scoped:
 - **Slice 1C-3 — IMPLEMENTED, local validation:** workspace creation/selection UI
   and `/app` integration. No new migration, table, column, policy or grant.
   Seller Shield alone owns authorization; no auth organization plugin.
-- **Slice 1D:** `cases`, `claim_snapshots`, and `case_events`, with their tenant
-  constraints and RLS tests. Slice 1E adds manual Create → Inbox → Detail.
+- **Slice 1D-1 — CURRENT:** `cases`, `claim_snapshots`, and `case_events`, with
+  tenant constraints and RLS tests. 1D-2 services/transitions/duplicate suspicion
+  and 1D-3 manual Create → Inbox → Detail remain PLANNED (formerly the 1E UI boundary).
 - **Slice 2:** Evidence, upload, Artifact, provenance, and retention structures.
 - **Slice 3:** readiness and policy structures.
 - **Slice 4:** DraftVersion, source links, assertions, and AI jobs only after

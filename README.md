@@ -21,6 +21,7 @@
 | Slice 1C-1 | Tenant/Membership 스키마·제약조건·ENABLE/FORCE RLS | APPROVED — local/test; 실DB·기본 build 검증 완료 |
 | Slice 1C-2 | RLS 허용 정책, 세션 기반 transaction context, 제한된 workspace 서버 서비스 | APPROVED — local/test; baseline `13262fc` |
 | Slice 1C-3 | workspace 생성·선택, 서버 재검증, workspace 기반 `/app` | 구현·로컬 회귀 검증 완료; 독립 리뷰 1회 차단 지적 없음 |
+| Slice 1D-1 | Case·원본 Snapshot·Timeline 저장 기반, 제약·RLS·최소 권한 | 구현·합성 데이터 실DB 검증; 서비스·화면은 미구현 |
 
 **아직 구현하지 않은 것:** 케이스·증거 관리, AI 지원, 마켓플레이스 연동,
 PDF 내보내기, 초대·멤버십 관리.
@@ -110,13 +111,15 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "Auth grant failed" }
   pnpm db:grant-tenancy
   if ($LASTEXITCODE -ne 0) { throw "Tenancy grant failed" }
+  pnpm db:grant-cases
+  if ($LASTEXITCODE -ne 0) { throw "Case grant failed" }
 } finally {
   pnpm db:provision-tenancy --finalize
   Remove-Item Env:DATABASE_PROVISION_URL -ErrorAction SilentlyContinue
 }
 ```
 
-현재 네 migration은 인증 테이블 5개와 `tenants`, `memberships`만 생성합니다.
+현재 다섯 migration은 인증 테이블 5개, `tenants`, `memberships`와 Case 저장 테이블 3개를 생성합니다.
 ENABLE/FORCE RLS는 유지하고, 명시적인 정책과 최소 column grant로 접근을 제한합니다.
 `db:grant-auth`는 같은 DB의 별도 migration 계정으로 인증 테이블 5개의 CRUD 권한만 부여하며,
 런타임 계정에 소유권·schema CREATE 권한을 주거나 계정을 생성하지 않습니다.
@@ -124,6 +127,9 @@ ENABLE/FORCE RLS는 유지하고, 명시적인 정책과 최소 column grant로 
 bootstrap 함수 EXECUTE만 부여합니다. 함수 권한은 migrator의 임시 helper 역할로 부여하고
 `--finalize`가 그 역할을 회수합니다. 런타임에는 helper 역할·일반 INSERT/DELETE를 주지 않습니다.
 자세한 범위는 [테넌트 권한 문서](docs/DATABASE.md#slice-1c-2-authorization--implemented-local-validation)를 참고하세요.
+`db:grant-cases`는 세 Case 테이블의 SELECT·명시적 컬럼 INSERT와 초기 Case 정규화 UPDATE만
+부여합니다. 상태 전이·원본 수정·물리 삭제 권한은 주지 않습니다. 두 DB URL의 query 옵션은
+거부합니다. 정확한 쓰기 계약과 범위는 [Case 저장 문서](docs/DATABASE.md#slice-1d-1-persistence--implemented-local-validation)를 참고하세요.
 
 테넌트 실DB 테스트에는 기존 런타임·migration URL 외에 `DATABASE_TEST_ADMIN_URL`을
 테스트 프로세스에 별도로 제공해야 합니다. 같은 전용 로컬/테스트 DB의 기존 setup 관리자
@@ -186,6 +192,7 @@ DB 명령어는 기존 프로세스 환경 변수 → `.env.local` → `.env` �
 | `pnpm db:grant-auth` | 다섯 인증 기반 테이블의 런타임 CRUD 권한 부여 |
 | `pnpm db:provision-tenancy --prepare/--finalize` | 설정 전용 관리자로 제한된 helper 준비·migrator 임시 역할 회수 |
 | `pnpm db:grant-tenancy` | 두 tenancy 테이블의 최소 column grant와 bootstrap EXECUTE 권한 부여 |
+| `pnpm db:grant-cases` | 세 Case 저장 테이블의 최소 column grant 부여; 상태 전이·삭제 제외 |
 
 일반 코드 검증과 production build는 별도의 게이트입니다.
 

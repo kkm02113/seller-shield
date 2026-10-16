@@ -1,8 +1,9 @@
 # Seller Shield security and privacy
 
 These are durable requirements and approved architecture controls. Only the
-Slice 1A/1B-1/1B-2/1C local database/auth/workspace controls identified below are
-implemented; Case/Evidence and real-customer production remain out of scope.
+Slice 1A/1B-1/1B-2/1C and 1D-1 local database/auth/workspace/persistence controls
+identified below are implemented; Case services, Evidence and real-customer
+production remain out of scope.
 
 ## Status
 
@@ -36,7 +37,16 @@ local application/DB/browser regression passes (2026-10-15). One independent
 focused review found no concrete Critical/Important/Minor issue. This is local
 integration evidence, not real-customer production approval.
 
-`NOT IMPLEMENTED`: Case/Evidence workflow isolation, object
+Slice 1D-1 adds locally verified Case/ClaimSnapshot/CaseEvent constraints and
+FORCE RLS, tenant-composite RESTRICT FKs and strict column grants. A global User
+is attribution, never access authority. Source/timeline rows cannot be updated
+or physically deleted by runtime; lifecycle and ownership writes are unavailable.
+Current timeline metadata is empty and workers are unsupported. Existing
+transaction-local context and Membership locks are reused, not replaced.
+See [the current persistence boundary](DATABASE.md#slice-1d-1-persistence--implemented-local-validation)
+for exact grants, explicit-column SQL consumer requirements and tests.
+
+`NOT IMPLEMENTED`: Case application workflow operations, Evidence isolation, object
 access, evidence hashing, general structured logging/audit events, and provider
 data controls.
 

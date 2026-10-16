@@ -28,8 +28,9 @@ The validation record is in the
 Slice 1C-3 workspace creation/selection UI and authorized `/app` are implemented
 and locally validated on 2026-10-15; one focused independent review found no
 blocking issue. This completes the local/test Slice 1C foundation, not production approval.
-Real Resend delivery remains unverified. Case/Evidence and other product
-tables, storage, AI,
+Slice 1D-1 adds locally verified Case/ClaimSnapshot/CaseEvent persistence only.
+Real Resend delivery remains unverified. Case services/UI, Evidence and other
+product tables, storage, AI,
 export, worker, and deployment remain **NOT IMPLEMENTED**. Local database setup
 is not production provisioning or proof of tenant isolation.
 
@@ -82,9 +83,9 @@ filesystem, so deployment must not assume static export semantics.
 ## Repository layout
 
 `src/app/`, `src/modules/identity/`, `src/platform/db/`, `src/platform/auth/`,
-`src/platform/email/`, four auth/tenancy migrations and unit/real-DB/browser
+`src/platform/email/`, five auth/tenancy/Case migrations and unit/real-DB/browser
 tests are implemented. Other product modules/platform adapters, `src/worker/`,
-product-domain migrations and the larger test hierarchy remain planned.
+remaining product-domain migrations and the larger test hierarchy remain planned.
 
 ```text
 seller-shield/
@@ -223,7 +224,8 @@ The conceptual model and future schema constraints are defined in
 [`docs/DATA_MODEL.md`](DATA_MODEL.md). The approved physical PostgreSQL table,
 constraint, index, and RLS policy design is in
 [`docs/DATABASE.md`](DATABASE.md). Four GLOBAL core auth tables, official
-`rate_limits`, and two tenancy tables exist through four reviewed migrations.
+`rate_limits`, two tenancy tables and three Case-domain tables exist through
+five reviewed migrations.
 Production role provisioning, automated test-database lifecycle, remaining
 product tables remain **NOT IMPLEMENTED**.
 
@@ -289,6 +291,20 @@ logout only. New workspace routes share no-store/no-referrer/noindex headers;
 route error boundaries show generic retry messages, not SQL/access details.
 No schema/migration/RLS/grant change, organization plugin, invitation, Case,
 Evidence, billing or advanced workspace management is part of this slice.
+
+### Slice 1D-1 — Case persistence IMPLEMENTED, local validation
+
+`src/platform/db/schema/cases.ts` defines the workflow aggregate, immutable
+source revisions and append-only timeline separately. Migration 0004 and the
+separate `db:grant-cases` command add only their constraints, FORCE RLS and
+minimal runtime privileges. Existing authenticated actor-first transaction
+context and ACTIVE Membership authorization remain the only tenant boundary.
+
+The [Database current contract](DATABASE.md#slice-1d-1-persistence--implemented-local-validation)
+owns exact state/write limits, RESTRICT attribution, metadata/job restrictions
+and Drizzle's explicit-column SQL requirement. Persistence/atomicity is tested;
+no Case application service, transition, revision allocator, duplicate logic,
+route, form, Inbox or Detail is implemented. Those remain 1D-2/1D-3.
 
 ## Authentication and tenant model
 

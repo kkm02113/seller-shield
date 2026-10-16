@@ -69,10 +69,10 @@ async function rejectsWrite(client: postgres.Sql, operation: (tx: postgres.Trans
 }
 
 describe("Tenant/Membership ↔ real PostgreSQL persistence", () => {
-  it("adds exactly two tenancy tables without other product tables", async () => {
+  it("retains exact public table inventory including the approved Case persistence slice", async () => {
     const tables = await owner`select tablename from pg_tables where schemaname = 'public' order by tablename`;
     expect(tables.map((table) => table.tablename)).toEqual([
-      "accounts", "memberships", "rate_limits", "sessions", "tenants", "users", "verifications",
+      "accounts", "case_events", "cases", "claim_snapshots", "memberships", "rate_limits", "sessions", "tenants", "users", "verifications",
     ]);
   });
 
@@ -85,7 +85,8 @@ describe("Tenant/Membership ↔ real PostgreSQL persistence", () => {
       { relname: "tenants", relrowsecurity: true, relforcerowsecurity: true },
     ]);
     const policies = await owner`select policyname from pg_policies where schemaname = 'public' order by policyname`;
-    expect(policies.map((row) => row.policyname)).toEqual(["memberships_actor_lock", "memberships_actor_select",
+    expect(policies.map((row) => row.policyname)).toEqual(["case_events_domain_insert", "case_events_member_select", "cases_member_select",
+      "cases_operator_insert", "cases_operator_update", "claim_snapshots_member_select", "claim_snapshots_operator_insert", "memberships_actor_lock", "memberships_actor_select",
       "memberships_bootstrap_insert", "tenants_bootstrap_insert", "tenants_member_select", "tenants_owner_update"]);
   });
 

@@ -9,7 +9,8 @@
 > Slice 1C-2 is IMPLEMENTED and locally validated on 2026-10-14, after one focused
 > independent review and a final F8 correction pass, then approved and committed
 > at `13262fc`. Slice 1C-3 UI is IMPLEMENTED and locally validated on 2026-10-15;
-> one focused independent review found no blocking issue. Slice 1D onward remains
+> one focused independent review found no blocking issue. Slice 1D-1 persistence
+> is implemented and locally validated on 2026-10-16; 1D-2 onward remains
 > PLANNED. This is the authoritative overall
 > execution plan; slice-specific plans are subordinate implementation records.
 > Execution must follow the root `AGENTS.md`;
@@ -164,8 +165,8 @@ None beyond the product name and documentation routes.
 > Slice 1C-1 persistence/default-deny is APPROVED — local/test on 2026-10-12.
 > Slice 1C-2 server authorization/bootstrap is IMPLEMENTED with local validation.
 > Slice 1C-3 workspace UI is implemented and locally validated with one focused review.
-> Slice 1D (Case/ClaimSnapshot/CaseEvent), and 1E (manual
-> Create → Inbox → Detail) remain PLANNED.
+> Slice 1D-1 Case/ClaimSnapshot/CaseEvent persistence is locally validated;
+> 1D-2 services and 1D-3 UI (formerly 1E) remain PLANNED.
 
 Slice 1A validation record: `pnpm install --frozen-lockfile`, `pnpm check`
 (15 tests), `pnpm build`, `pnpm db:check`, `pnpm db:migrate`, and `pnpm test:db`
@@ -416,6 +417,21 @@ One primary implementer; one final focused independent review, no commits/pushes
   must check zero temporary helper members, runtime no BYPASSRLS/SET ROLE helper,
   FORCE RLS and only expected policies. This is operational debt, not implemented
   automation or a 1C-3 blocker.
+
+### Slice 1D handoff — persistence, application service, then UI
+
+Slice 1C-3 is APPROVED — local/test and committed at `498d0c7`. The user's
+2026-10-15 follow-up narrows the remaining Case work into:
+
+1. **1D-1:** Case/ClaimSnapshot/CaseEvent persistence, constraints and RLS.
+2. **1D-2:** authorized Case services, permitted transitions and duplicate suspicion.
+3. **1D-3:** manual creation, Inbox and Detail UI (the previous 1E UI boundary).
+
+The [1D-1 execution plan](0004-case-persistence.md) and four narrow refinements
+were approved on 2026-10-16. Persistence is implemented and real-DB validated;
+exact gates/review status are recorded there. Only three tables and migration
+0004 were added. Existing whole-Slice goals below are not all part of 1D-1;
+no 1D-2 service or UI work has started.
 
 ### Whole Slice 1 goal
 

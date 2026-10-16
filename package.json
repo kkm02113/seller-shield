@@ -22,6 +22,7 @@
     "db:migrate": "drizzle-kit migrate --config=drizzle.migrate.config.ts",
     "db:check": "node scripts/db-check.ts",
     "db:grant-auth": "node scripts/db-grant-auth.ts",
+    "db:grant-cases": "node scripts/db-grant-cases.ts",
     "db:provision-tenancy": "node scripts/db-provision-tenancy.ts",
     "db:grant-tenancy": "node scripts/db-grant-tenancy.ts"
   },

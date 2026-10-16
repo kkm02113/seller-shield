@@ -16,6 +16,9 @@ not define database columns, SQL, migrations, or implemented behavior.
   adds locally validated workspace UI using the same authorization model; one
   focused review found no blocking issue.
   Exact physical status/validation is owned by [`DATABASE.md`](DATABASE.md).
+  Slice 1D-1 adds locally validated Case/ClaimSnapshot/CaseEvent persistence,
+  source/timeline immutability and tenant constraints/RLS. Case services,
+  lifecycle operations, duplicate suspicion and UI are not implemented.
 - **PLANNED / NOT IMPLEMENTED:** remaining product tables,
   membership administration, storage, and jobs.
 - **OPEN:** provider choices, retention periods, physical deletion schedules,

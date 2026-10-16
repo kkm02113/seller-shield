@@ -1,7 +1,16 @@
 # Cases and claims
 
 This document defines MVP v0.1 Case and source-claim semantics. It does not
-claim that a model or lifecycle is implemented.
+claim that the full model or lifecycle is implemented.
+
+**CURRENT 1D-1:** Case/ClaimSnapshot/CaseEvent persistence and tenant-safe runtime
+ACL/RLS are locally validated. All states/dispositions below are representable;
+runtime creates DRAFT only and cannot write state/disposition or logical deletion.
+Only OWNER/OPERATOR early-state normalization and immutable source/timeline
+append are allowed. No transition/duplicate service or Case UI exists yet.
+Case-local revisions are positive/unique; allocation/retry belongs to 1D-2.
+The [physical/current scope](../DATABASE.md#slice-1d-1-persistence--implemented-local-validation)
+owns exact constraints, attribution deletion restrictions and timeline metadata.
 
 ## Meaning
 

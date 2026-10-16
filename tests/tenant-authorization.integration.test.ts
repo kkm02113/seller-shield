@@ -5,9 +5,11 @@ const database = openTenancyDatabase();
 afterAll(() => database.close());
 
 describe("runtime tenancy RLS policies", () => {
-  it("has exactly the approved six policies and retains ENABLE/FORCE RLS", async () => {
+  it("has exactly the approved tenancy plus Case policies and retains ENABLE/FORCE RLS", async () => {
     const policies = await database.owner`select policyname from pg_policies where schemaname = 'public' order by policyname`;
     expect(policies.map((row) => row.policyname)).toEqual([
+      "case_events_domain_insert", "case_events_member_select", "cases_member_select", "cases_operator_insert", "cases_operator_update",
+      "claim_snapshots_member_select", "claim_snapshots_operator_insert",
       "memberships_actor_lock", "memberships_actor_select", "memberships_bootstrap_insert",
       "tenants_bootstrap_insert", "tenants_member_select", "tenants_owner_update",
     ]);
